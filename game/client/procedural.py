@@ -410,3 +410,28 @@ def build_map():
         b.sphere(pos, r, _mix(rock_a, rock_b, rng.random()), seg=7, rings=5,
                  scale=(rng.uniform(0.7, 1.4), rng.uniform(0.6, 1.1), rng.uniform(0.7, 1.4)))
     return b
+
+
+# ------------------------------------------------------------------ 스킬 메시 (거미 고치, 용의 회오리)
+def build_cocoon():
+    """거미 여왕의 새끼 거미 고치: 누런 비단으로 감싼 알 + 바닥에 퍼진 거미줄."""
+    b = MeshBuilder()
+    silk, band = (0.93, 0.86, 0.68), (0.78, 0.68, 0.48)
+    b.sphere((0, 0.5, 0), 0.5, silk, seg=12, rings=8, scale=(0.85, 1.15, 0.85))
+    for j, y in enumerate((0.3, 0.5, 0.7)):
+        w = (0.43, 0.46, 0.4)[j]
+        b.ring((0, y, 0), w - 0.03, w + 0.03, band, seg=14)
+    b.ring((0, 0.03, 0), 0.3, 0.62, (0.85, 0.82, 0.74), seg=16)
+    return b
+
+
+def build_tornado_layer(i, n=9, seg=12):
+    """보스러시 용의 회오리 한 겹: 위로 갈수록 넓어지는 속 빈 원뿔대. 겹마다 반지름이 0.5 씩 커지고, 줄무늬가 있어 돌면 소용돌이로 보인다."""
+    b = MeshBuilder()
+    r0, r1 = 0.7 + i * 0.5, 0.7 + (i + 1) * 0.5
+    for j in range(seg):
+        a0, a1 = j / seg * math.tau, (j + 1) / seg * math.tau
+        c = (1.0, 1.0, 1.0) if j % 2 else (0.62, 0.62, 0.62)
+        p = lambda r, a, y: (math.cos(a) * r, y, math.sin(a) * r)
+        b.quad(p(r0, a0, 0.0), p(r0, a1, 0.0), p(r1, a1, 1.0), p(r1, a0, 1.0), c)
+    return b

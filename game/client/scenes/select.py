@@ -136,10 +136,7 @@ class SelectScene(Scene):
         self.angle += dt * 0.6
         ca = self.preview_anim()
         if ca:
-            if ca.is_rig:                       # 절차적 리그는 화면 위치/방향을 받아 움직인다 (원점에서 천천히 돈다)
-                ca.update(dt, None, _PreviewEnt(math.pi / 2 - self.angle))
-            else:
-                ca.update(dt, None)
+            ca.update(dt, None, _PreviewEnt(math.pi / 2 - self.angle))     # 리그는 화면 위치/방향을 받아 움직인다 (원점에서 천천히 돈다)
             self.pv_timer -= dt
             if self.pv_timer <= 0:
                 ca.play_key(SHOWCASE[self.pv_i % len(SHOWCASE)])
@@ -156,7 +153,7 @@ class SelectScene(Scene):
             self.btn_lock.label = "확정 완료"
 
     def preview_anim(self):
-        """지금 보고 있는 챔피언의 동작 제어기 (뼈대 모델이 없으면 None)."""
+        """지금 보고 있는 챔피언의 리그 동작 제어기 (리그가 없으면 None)."""
         if not self.preview:
             return None
         if self.preview not in self.pv_anim:
@@ -179,11 +176,10 @@ class SelectScene(Scene):
         if self.preview:
             ca = self.preview_anim()
             bob = 0.0 if ca else math.sin(self.app.time * 2) * 0.02
-            if ca and ca.is_rig:
+            if ca:
                 ca.draw(r)
             else:
-                r.draw(models.champion(self.preview), model_matrix(0, bob, 0, rot_y=self.angle),
-                       bones=ca.bones() if ca else None)
+                r.draw(models.champion(self.preview), model_matrix(0, bob, 0, rot_y=self.angle))
 
     def draw_ui(self, surf):
         room = self.app.room

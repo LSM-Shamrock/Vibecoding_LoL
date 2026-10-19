@@ -5,8 +5,7 @@
 - .glb / .gltf / .ply / .stl / .off : trimesh 사용 (pip install trimesh pillow)
 
 로드한 모델은 설정의 height 에 맞게 크기를 맞추고, 발밑이 y=0, 중심이 원점에 오도록 정규화한다.
-챔피언은 뼈대 애니메이션(.skin.npz, tools/bake_skin.py 로 만든다)이 있으면 그것을 쓰고,
-없으면 정지 메시 + 코드로 만든 걷기/공격 모션으로 그린다.
+챔피언은 코드로 몸을 만들고 움직이는 절차적 리그(game/client/rigs)로 그린다.
 """
 import logging
 import math
@@ -18,10 +17,8 @@ import pygame
 
 from ..shared import data as gamedata
 from ..shared.constants import ROOT_DIR
-from . import champion_models, procedural
-from .champ_anim import ChampAnim
-from .gl import Mesh, SkinnedMesh, bounds_of
-from .skin import SkinData
+from . import procedural
+from .gl import Mesh, bounds_of
 
 # trimesh 는 scipy 가 없으면 경고 로그를 크게 남기지만 동작에는 문제가 없다
 logging.getLogger("trimesh").setLevel(logging.ERROR)
@@ -218,7 +215,6 @@ class ModelLibrary:
         self.cache = {}
         self.messages = []          # 로딩 결과 (화면 표시/디버그용)
         self.from_file = set()      # 모델 파일로 불러온 월드 모델 키
-        self.skins = {}             # 챔피언 id -> SkinData (뼈대 애니메이션이 있는 챔피언)
         self.rig_assets = {}        # 절차적 리그 이름 -> 메시 묶음
         self._build_defaults()
 
@@ -236,7 +232,6 @@ class ModelLibrary:
         self.ring_thin = self._mesh(unit_builder_ring(0.04))     # 두께 비율 0.04 (scenes/game.py 의 RING_THIN 과 같게)
         self.relic = self._mesh(P.build_relic())
         self.rubble = self._mesh(P.build_rubble())
-        C = champion_models
         self.proj = {
             "arrow": self._mesh(P.build_arrow((0.85, 0.95, 1.0))),
             "snowball": self._mesh(P.build_orb((0.95, 0.97, 1.0), 0.28)),
@@ -250,23 +245,11 @@ class ModelLibrary:
             "spine": self._mesh(P.build_arrow((1.0, 0.45, 0.25))),
             "minion_bolt": self._mesh(P.build_orb((1.0, 1.0, 1.0), 0.06)),
             "cannon_ball": self._mesh(P.build_orb((0.55, 0.55, 0.6), 0.09)),
-            # 챔피언 스킬 투사체
-            "knife": self._mesh(C.build_knife()),
-            "knife_fast": self._mesh(C.build_knife_fast()),
-            "hook": self._mesh(C.build_hook()),
-            "chain": self._mesh(C.build_chain()),
-            "giant_arrow": self._mesh(C.build_giant_arrow()),
-            "light_bolt": self._mesh(C.build_light_bolt()),
-            "leaf_bolt": self._mesh(C.build_leaf_bolt()),
             "fire_bolt": self._mesh(P.build_orb((1.0, 0.62, 0.18), 0.1)),
         }
         # 용의 회오리: 9겹 원뿔대 (보스러시 원본과 같은 구성)
-        self.tornado_layers = [self._mesh(C.build_tornado_layer(i)) for i in range(9)]
-        # 스킬 장치 (줄 말뚝, 사냥 덫, 대종)
-        self.anchor = self._mesh(C.build_anchor())
-        self.trap = self._mesh(C.build_trap())
-        self.cocoon = self._mesh(C.build_cocoon())
-        self.bell = self._mesh(C.build_bell())
+        self.tornado_layers = [self._mesh(P.build_tornado_layer(i)) for i in range(9)]
+        self.cocoon = self._mesh(P.build_cocoon())
         self.orb = self._mesh(P.build_orb((1, 1, 1), 1.0))
         self.team_meshes = {}
         for team in (0, 1):
@@ -347,80 +330,25 @@ class ModelLibrary:
         self.cache[key] = mesh
         return mesh
 
-    def load_skin(self, path):
-        """뼈대 애니메이션 모델(.skin.npz) -> (SkinnedMesh, SkinData). 실패하면 (None, None)."""
-        full = resolve_path(path)
-        key = ("skin", full)
-        if key in self.cache:
-            return self.cache[key]
-        result = (None, None)
-        if not os.path.exists(full):
-            self.messages.append(f"뼈대 모델 없음: {path}")
-        else:
-            try:
-                data = SkinData(full)
-                base = os.path.dirname(full)
-                parts = []
-                for arr, jw, tex_name in data.parts:
-                    tex = None
-                    if tex_name:
-                        tex = self.r.make_texture(pygame.image.load(os.path.join(base, tex_name)))
-                    parts.append((arr, jw, tex))
-                mesh = SkinnedMesh(self.r, parts, bounds_of(np.concatenate([a for a, _, _ in data.parts])))
-                tri = sum(len(a) for a, _, _ in data.parts) // 3
-                self.messages.append(f"뼈대 모델 로드: {path} ({tri} 삼각형, 동작 {len(data.clips)}개)")
-                result = (mesh, data)
-            except Exception as e:  # noqa: BLE001
-                traceback.print_exc()
-                self.messages.append(f"뼈대 모델 로드 실패: {path} ({e})")
-        print("[모델]", self.messages[-1])
-        self.cache[key] = result
-        return result
-
-    def champion_skin(self, cid):
-        """챔피언의 뼈대 애니메이션 데이터. 없으면 None (정지 모델로 그린다)."""
-        self.champion(cid)
-        return self.skins.get(cid)
-
     def new_champ_anim(self, cid):
-        """챔피언 한 명(한 판의 한 캐릭터)용 동작 제어기. 뼈대 모델이 없으면 None."""
+        """챔피언 한 명(한 판의 한 캐릭터)용 리그 동작 제어기. 리그가 없으면 None."""
         rig = self.rig_name(cid)
-        if rig:                                         # 코드로 움직이는 절차적 리그 (거미 등)
-            from .rigs import make_rig
-            return make_rig(rig, self.r, self.rig_assets)
-        skin = self.champion_skin(cid)
-        if skin is None:
+        if not rig:
             return None
-        data = gamedata.champion(cid) or {}
-        cfg = (data.get("model") or {}).get("anim") or {}
-        return ChampAnim(skin, cfg, (data.get("stats") or {}).get("attack_speed", 0.7))
+        from .rigs import make_rig
+        return make_rig(rig, self.r, self.rig_assets)
 
     def rig_name(self, cid):
-        """절차적 리그 챔피언이면 리그 이름 (model.rig), 아니면 None."""
+        """챔피언의 절차적 리그 이름 (model.rig)."""
         return ((gamedata.champion(cid) or {}).get("model") or {}).get("rig")
 
     def champion(self, cid):
-        """챔피언 모델. 우선순위: 뼈대 모델(model.skin) → 모델 파일(model.file) → 코드 모델(model.procedural) → 단순 인형."""
+        """챔피언 자리 메시. 몸은 new_champ_anim() 의 리그가 그리고, 리그가 없으면 단순 인형으로 그린다."""
         key = ("champ", cid)
         if key in self.cache:
             return self.cache[key]
         data = gamedata.champion(cid) or {}
-        cfg = data.get("model") or {}
-        mesh = None
-        if cfg.get("rig"):                      # 절차적 리그는 몸을 new_champ_anim() 이 그린다 (여기는 빈 자리 메시)
-            mesh = self._mesh(procedural.build_mannequin((0.5, 0.2, 0.15)))
-            self.cache[key] = mesh
-            return mesh
-        if cfg.get("skin"):
-            mesh, skin = self.load_skin(cfg["skin"])
-            if mesh is not None:
-                self.skins[cid] = skin
-        if mesh is None and cfg.get("file"):
-            mesh = self.load_file(cfg["file"], cfg)
-        if mesh is None and cfg.get("procedural") in champion_models.CHAMPION_BUILDERS:
-            mesh = self._mesh(champion_models.CHAMPION_BUILDERS[cfg["procedural"]]())
-        if mesh is None:
-            col = tuple(c / 255 for c in data.get("color", (200, 200, 200)))
-            mesh = self._mesh(procedural.build_mannequin(col))
+        col = tuple(c / 255 for c in data.get("color", (200, 200, 200)))
+        mesh = self._mesh(procedural.build_mannequin(col))
         self.cache[key] = mesh
         return mesh

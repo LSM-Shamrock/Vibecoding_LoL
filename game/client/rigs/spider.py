@@ -16,10 +16,9 @@ import random
 
 import numpy as np
 
-from ..champ_anim import DEATH_FADE, DEATH_SHOW
 from ..geometry import MeshBuilder
 from ..gl import Mesh, facing_to_rot
-from . import CHAMP_SCALE
+from . import CHAMP_SCALE, DEATH_FADE, DEATH_SHOW
 
 PI = math.pi
 SC = 0.28 * CHAMP_SCALE         # 보스 단위 -> 이 게임 단위
@@ -236,8 +235,6 @@ class _Debris:
 
 
 class SpiderAnim:
-    is_rig = True
-
     def __init__(self, assets):
         self.a = assets
         self.t = 0.0
@@ -293,7 +290,7 @@ class SpiderAnim:
         self._sync_body(0.0)
         self._solve_legs()
 
-    # ------------------------------------------------------------ 외부 API (champ_anim.ChampAnim 과 같은 모양)
+    # ------------------------------------------------------------ 외부 API (게임·선택 장면이 부른다)
     def set_pose(self, name, rate=8.0):
         if name == self.pose_name and abs(self.rate.get('height', 0) - rate) < 1e-6:
             return
@@ -348,9 +345,6 @@ class SpiderAnim:
         if self.was_dead:
             return max(0.0, min(1.0, (DEATH_SHOW - self.dead_clock) / DEATH_FADE))
         return 1.0
-
-    def bones(self):
-        return None
 
     # ------------------------------------------------------------ 발 / 홈
     def _compute_homes(self, stance):
@@ -542,7 +536,7 @@ class SpiderAnim:
                 pass
             elif "air" in st:
                 self.set_pose('air', 8)
-            elif "stun" in st or "caged" in st:
+            elif "stun" in st:
                 self.set_pose('stagger', 6)
             elif self.cast_pose and self.t < self.cast_until:
                 self.set_pose(self.cast_pose, 7 if self.cast_pose == 'webWind' else 6)

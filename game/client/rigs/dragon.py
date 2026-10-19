@@ -20,12 +20,11 @@ import random
 
 import numpy as np
 
-from ..champ_anim import DEATH_FADE, DEATH_SHOW
 from ..geometry import MeshBuilder
 from ..gl import Mesh, facing_to_rot
 from .spider import _S, _T, _Rx, _Ry, _euler, _from_to, _wrap, heavy_chain
 from . import dragon_assets as A
-from . import BIG_SCALE, CHAMP_SCALE
+from . import BIG_SCALE, CHAMP_SCALE, DEATH_FADE, DEATH_SHOW
 
 PI = math.pi
 TAU = PI * 2
@@ -371,7 +370,6 @@ class _Debris:
 
 # ───────────────────────── 본체 ─────────────────────────
 class DragonAnim:
-    is_rig = True
     @property
     def bar_h(self):                                            # 게임 장면이 체력바를 달 높이 (날아오르면 따라 오른다)
         return 2.75 * CHAMP_SCALE * BIG_SCALE + 0.2 + self.air * SC
@@ -487,9 +485,6 @@ class DragonAnim:
         if self.was_dead:
             return max(0.0, min(1.0, (DEATH_SHOW - self.dead_clock) / DEATH_FADE))
         return 1.0
-
-    def bones(self):
-        return None
 
     def mouth(self):
         """머리 앞 입의 월드 위치 (불 뱉기 발사점): (x, y, z)"""
@@ -906,7 +901,7 @@ class DragonAnim:
                 self.moving = False
         if self.seq and self.t < self.seq_end:
             name = next(n for e, n in self.seq if self.t < e)
-        elif "air" in st or "stun" in st or "caged" in st:
+        elif "air" in st or "stun" in st:
             name = 'stagger'
         elif self.won:
             name = 'win'

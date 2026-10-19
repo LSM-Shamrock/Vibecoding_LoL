@@ -21,11 +21,10 @@ import weakref
 import numpy as np
 import pygame
 
-from ..champ_anim import DEATH_FADE, DEATH_SHOW
 from ..geometry import MeshBuilder
 from ..gl import Mesh, facing_to_rot
 from .spider import _T, _S, _Rx, _Ry, _Rz, _euler, _from_to, _hex, _wrap, _xf, heavy_chain
-from . import BIG_SCALE, CHAMP_SCALE
+from . import BIG_SCALE, CHAMP_SCALE, DEATH_FADE, DEATH_SHOW
 
 PI = math.pi
 TAU = PI * 2
@@ -471,7 +470,6 @@ class _Debris:
 
 
 class SerpentAnim:
-    is_rig = True
     bar_h = 3.4 * CHAMP_SCALE * BIG_SCALE + 0.2                             # 게임 장면이 체력바를 달 높이 (세운 머리 위)
     pick_h = 2.8 * CHAMP_SCALE * BIG_SCALE                                 # 마우스로 고를 수 있는 높이
 
@@ -555,7 +553,7 @@ class SerpentAnim:
         self._solve_body()
         self._place_head(0.0)
 
-    # ------------------------------------------------------------ 외부 API (champ_anim.ChampAnim 과 같은 모양)
+    # ------------------------------------------------------------ 외부 API (게임·선택 장면이 부른다)
     def _play(self, steps):
         """steps = [(길이(초), 자세 이름), ...] 를 차례로 보여 준다."""
         t = self.t
@@ -637,9 +635,6 @@ class SerpentAnim:
         if self.was_dead:
             return max(0.0, min(1.0, (DEATH_SHOW - self.dead_clock) / DEATH_FADE))
         return 1.0
-
-    def bones(self):
-        return None
 
     def _draw_scale(self):
         ox, oz = self.ofs if self.ofs is not None else (0.0, 0.0)
@@ -1116,7 +1111,7 @@ class SerpentAnim:
                 self.moving = False
         if self.seq and self.t < self.seq_end:
             name = next(n for e, n in self.seq if self.t < e)
-        elif "air" in st or "stun" in st or "caged" in st:
+        elif "air" in st or "stun" in st:
             name = 'stagger'
         elif self.won:
             name = 'win'

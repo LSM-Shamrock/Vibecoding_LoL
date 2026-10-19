@@ -135,9 +135,7 @@ PNG 가 없으면 게임은 예전처럼 글자 아이콘으로 대신 보여 �
 
 ## 챔피언
 
-지금 선택 화면에 나오는 챔피언은 **거미 여왕**, **이무기**, **용** 셋입니다. 보스러시 게임(`VibeCoding_BossRush_Pygame`)의 보스 세 마리를 챔피언으로 옮겼고,
-기존 7명은 코드·모델·스킬을 그대로 두고 **선택 화면, 방, 봇 선택에서만 숨겨 두었습니다** (JSON 에 `"hidden": true`).
-다시 보이게 하려면 `data/champions/01~07*.json` 의 `"hidden": true` 줄을 지우세요 (테스트 코드는 숨긴 챔피언도 직접 불러 씁니다).
+챔피언은 **거미 여왕**, **이무기**, **용** 셋입니다. 보스러시 게임(`VibeCoding_BossRush_Pygame`)의 보스 세 마리를 챔피언으로 옮겼습니다.
 
 ### 거미 여왕 (`spider`) — 보스러시 "동굴 여왕 거미" 이식
 
@@ -196,54 +194,10 @@ PNG 가 없으면 게임은 예전처럼 글자 아이콘으로 대신 보여 �
 불 이펙트는 팀 색을 섞지 않고 불 색 그대로 그립니다 (`Vfx.neutral()`). 효과음은 `cast_fire`, `cast_wing`, `cast_roar`, `fx_fireburst`, `fx_gust`, `fx_meteor` (`data/sounds.json`).
 
 
-### 기존 챔피언 7종 (기획서 기반, 현재 숨김)
-
-| id | 이름 | 컨셉 |
-|---|---|---|
-| `vanguard` | 바르고 | 중갑 탱커 · 이니시에이터 (반격의 방어막, 밀치기, 미니맵으로 강습) |
-| `reaper` | 카론 | 낫 브루저 (흡혈, 낫 휘두르기, 구조물 통과 이동, 영혼 속박) |
-| `monk` | 무진 | 소리 탱커 (타종 표식 → 메아리 · 정적의 종 · 대종 낙하 감옥) |
-| `acrobat` | 꼭두 | 외줄 광대 암살자 (갈고리 돌진, 단검 던지기, 줄 말뚝, 공중 외줄) |
-| `hunter` | 아린 | 원거리 지속딜러 (관통 사격, 사냥 덫, 구르기, 관통 화살) |
-| `cleric` | 엘리아 | 정통 힐러 (치유의 빛, 성역, 정화, 불멸의 기도) |
-| `druid` | 로웬 | 유틸 힐러 (가시 덩굴, 꽃잎 보호막, 바람의 축복, 대자연의 정원) |
-
-> 기획서에 **이름·수치(피해량, 마나, 체력 등)가 없는 항목은 임시값**입니다. 쿨타임·지속시간·범위처럼 기획서에 적힌 값은 그대로 넣었고,
-> 쿨타임은 스킬 레벨과 상관없이 같은 값입니다 (`data/champions/*.json` 의 `cooldown` 배열을 바꾸면 레벨별로 다르게 할 수 있음).
-> 캐릭터 이름·부제는 임시 이름이니 JSON 의 `name`, `title` 만 바꾸면 됩니다.
-
 ## 3D 모델
 
-챔피언 7명은 **KayKit 캐릭터 팩(CC0)** 으로 만든 모델 파일(`assets/models/champions/<id>/model.obj`)을 씁니다.
-출처와 라이선스는 `assets/models/champions/CREDITS.md` 에 있습니다.
-
-| 챔피언 | 원본 모델 | 장비 / 색 |
-|---|---|---|
-| 바르고 | Knight | 검 + 방패 |
-| 카론 | Skeleton Rogue | 코드로 만든 낫, 보라색 후드 |
-| 무진 | Barbarian | 맨손 (모자·망토 제거), 주황색 승복 |
-| 꼭두 | Rogue | 단검 두 자루, 붉은 옷 |
-| 아린 | Rogue Hooded | 석궁 |
-| 엘리아 | Mage | 지팡이, 흰색·금색 (모자 제거) |
-| 로웬 | Mage | 마법봉, 초록·갈색 |
-
-모델은 우선순위대로 불러옵니다: **모델 파일(`model.file`) → 코드로 만든 모델(`model.procedural`, `game/client/champion_models.py`) → 단순 인형**.
-그래서 모델 파일을 지우거나 읽지 못하면 코드로 만든 모델이 대신 나옵니다.
-
-### 모델 파일 직접 바꾸기
-
-1. 모델 파일을 `assets/models/champions/<id>/` 에 복사 (예: `vanguard.glb`)
-2. `data/champions/01_vanguard.json` 의 `model` 수정
-
-```json
-"model": {
-  "file": "assets/models/champions/vanguard/vanguard.glb",
-  "height": 2.0,
-  "rotation_y": 0,
-  "offset": [0, 0, 0],
-  "up_axis": "y"
-}
-```
+챔피언은 모델 파일 없이 `game/client/rigs/` 의 절차적 리그로 그립니다 (JSON 의 `"model": {"rig": ...}`).
+미니언·포탑·억제기·넥서스는 `data/world_models.json` 에 모델 파일을 지정하면 코드로 만든 모양 대신 그 파일을 씁니다.
 
 | 항목 | 설명 |
 |---|---|
@@ -255,57 +209,9 @@ PNG 가 없으면 게임은 예전처럼 글자 아이콘으로 대신 보여 �
 | `up_axis` | 모델이 누워 있으면 `"z"` (블렌더에서 Z-up 으로 내보낸 경우) |
 | `pixelated` | `true` 면 텍스처를 보간 없이 또렷하게 표시 (픽셀아트/복셀 스타일 모델용) |
 
-미니언·포탑·억제기·넥서스도 `data/world_models.json` 에 같은 형식으로 파일을 지정하면 교체됩니다.
 `.fbx` 는 지원하지 않으니 블렌더 등에서 `.glb` 로 변환해 주세요.
 
-### 도구 (`tools/`)
-
-- `bake_gltf_pose.py` — 뼈대가 있는 `.glb` 캐릭터를 **Idle 같은 동작 한 장면으로 굳혀** OBJ 로 내보낸다. 리깅 모델은 그대로 불러오면 팔을 벌린 T자로 서 있기 때문.
-  `py tools/bake_gltf_pose.py 모델.glb 출력폴더 --name model --anim Idle` (`--list` 로 동작·부품 이름 확인, `--hide` 로 부품 제거)
-- `bake_skin.py` — 같은 `.glb` 를 **뼈대 애니메이션 데이터(`model.skin.npz`)** 로 굽는다 (아래 "챔피언 모델 애니메이션").
-- `build_champion_models.py` — 위 도구로 KayKit 팩에서 7명의 모델(+애니메이션)을 다시 만든다 (장비 고르기, 색 바꾸기, 낫 추가 포함).
-  `py tools/build_champion_models.py <Adventures 폴더> <Skeletons 폴더>` — 두 팩은 GitHub 에서 받을 수 있다 (`CREDITS.md` 의 주소).
-- `export_champion_model.py` — 코드로 만든 모델을 `procedural.obj` 로 내보내 블렌더에서 다듬을 수 있다 (`model.obj` 는 덮어쓰지 않음).
-
-스킬 투사체·줄 말뚝·사냥 덫·대종 모양은 `champion_models.py` 에 있습니다.
 (`assets/models/kenney_blocky/` 의 [Kenney Blocky Characters](https://kenney.nl) `character-m` (CC0) 은 참고용입니다.)
-
-## 챔피언 모델 애니메이션
-
-챔피언 7명은 KayKit 모델 안에 들어 있는 **뼈대(스켈레탈) 애니메이션**으로 움직입니다 (가만히 서기, 달리기, 공격, 스킬, 기절, 공중, 귀환, 사망, 부활, 승리).
-`.glb` 의 동작을 미리 구워서 `assets/models/champions/<id>/model.skin.npz` 한 파일에 담아 두고, 게임에서는 그래픽카드가 뼈대를 움직입니다
-(`game/client/skin.py` 가 읽고 재생, `game/client/champ_anim.py` 가 서버 상태 → 동작을 고름, `game/client/gl.py` 의 `MESH_SKIN_VS` 가 그림).
-`model.skin` 이 없거나 읽지 못하면 예전처럼 정지 모델(`model.file`)에 코드로 만든 흔들림 모션을 줍니다.
-
-동작 이름은 챔피언 JSON 의 `model.anim` 에서 정합니다:
-
-```json
-"model": {
-  "file": "...", "skin": "assets/models/champions/vanguard/model.skin.npz",
-  "anim": {
-    "attack": ["1H_Melee_Attack_Slice_Diagonal", "1H_Melee_Attack_Chop"],
-    "Q": "2H_Melee_Attack_Spinning",
-    "R": {"clip": "Jump_Full_Short", "speed": 1.0, "max": 1.2}
-  }
-}
-```
-
-| 키 | 설명 |
-|---|---|
-| `attack` | 기본 공격 동작. 목록이면 돌아가며 쓴다. 공격 선딜에 맞게 재생 속도가 자동으로 정해짐 |
-| `Q` `W` `E` `R` | 그 스킬을 쓸 때 동작. 없으면 `cast` |
-| `cast` | 스킬 동작이 따로 없을 때의 기본 시전 동작 |
-| `idle` `run` `death` `spawn` `air` `stun` `recall` `win` | 상태별 동작 (생략하면 `Idle` `Running_A` `Death_A` `Jump_Land` `Jump_Idle` `Hit_B` `Spellcasting` `Cheer`) |
-
-값은 동작 이름이거나 `{"clip": 이름, "speed": 배속, "max": 최대 재생 시간(초)}` 입니다.
-선택 화면에서는 기본 공격과 Q·W·E·R 동작을 차례로 보여 줍니다.
-
-KayKit 의 다른 동작을 쓰려면 `model.anim` 에 동작 이름을 적고 `py tools/build_champion_models.py <Adventures 폴더> <Skeletons 폴더>` 를 다시 실행하세요
-(JSON 의 `model.anim` 에 적힌 동작만 `model.skin.npz` 에 구워 넣습니다).
-동작 이름 목록은 `py tools/bake_gltf_pose.py 모델.glb x --list` 로 볼 수 있습니다 (모델마다 76개 안팎).
-`tools/bake_skin.py` 는 위 빌드 도구가 불러 쓰는 굽기 모듈입니다 (뼈 32개 이하, 30fps).
-
-새로운 종류의 스킬이 필요하면 `game/server/abilities.py` 에 `@handler("새type")` 함수를 추가하면 됩니다.
 
 ## 효과음
 
@@ -316,8 +222,8 @@ KayKit 의 다른 동작을 쓰려면 `model.anim` 에 동작 이름을 적고 `
 |---|---|
 | 화면(UI) | 버튼 클릭·마우스 올림, 챔피언 선택·확정, 상점 열고 닫기, 구매·판매, 채팅, 오류, 선택 마감 5초 전 똑딱 |
 | 내 챔피언 | 레벨 업, 스킬 레벨 올림, 스킬을 못 쓸 때(쿨타임·마나 부족), 골드, 회복, 맞을 때, 처치, 연속 처치, 발소리 |
-| 기본 공격 | 챔피언마다 휘두르는 소리(검·낫·주먹·단검·석궁·마법)와 맞는 소리가 다름 |
-| 스킬 | 스킬 종류(`type`)마다 시전 소리, 충돌·폭발·덫·종·갈고리 같은 이펙트 소리 |
+| 기본 공격 | 챔피언마다 휘두르는 소리(물기·불꽃 등)와 맞는 소리가 다름 |
+| 스킬 | 스킬 종류(`type`)마다 시전 소리, 충돌·폭발·착지 같은 이펙트 소리 |
 | 전장 | 포탑 레이저, 미니언 공격·죽음, 구조물 방어판 파괴·폭발, 귀환, 부활, 유물, 알림 |
 | 아나운서 | 한국어 롤 아나운서 음성(`assets/sounds/announcer/`): 아래 "아나운서 음성" 참고. 챔피언 선택 화면 시작 소리만 `voice/` 의 영어 음성 |
 
@@ -366,39 +272,13 @@ KayKit 의 다른 동작을 쓰려면 `model.anim` 에 동작 이름을 적고 `
 
 `data/champions/` 에 JSON 파일을 하나 더 만들면 선택 화면에 자동으로 나타납니다 (파일 이름 순서로 정렬, 봇도 서로 다른 챔피언을 고릅니다).
 기존 JSON 을 복사해서 `id`, `name`, `stats`, `abilities` 를 고치면 됩니다. 패시브는 없어도 됩니다.
-- `"hidden": true` — 선택 화면·봇·서버 선택 검사에서 빼고 코드만 남긴다.
 - `"model": {"rig": "<이름>", "scale": 숫자}` — 모델 파일 대신 `game/client/rigs/` 의 절차적 리그로 그린다 (`make_rig`).
 - 새 챔피언의 스킬 아이콘은 `python tools/build_icons.py --only <id>`, 초상화는 `python tools/build_portraits.py <id>` (id 를 빼면 전부 다시 만듦), 이펙트 그림은 `python tools/build_fx_sprites.py <이름...>` 으로 만듭니다.
 스킬은 `type` 으로 동작이 정해지고(`game/server/abilities.py`), 값이 리스트면 스킬 레벨별 값입니다 (`cooldown`, `mana` 는 항상 리스트).
 
 | type | 동작 | 주요 값 |
 |---|---|---|
-| `skillshot` | 직선 투사체. 관통·멀수록 강해지는 피해·둔화/기절/속박 가능 | `range`, `speed`, `width`, `damage`, `pierce`, `distance_bonus`, `distance_full`, `slow`, `stun`, `root`, `style` |
-| `self_buff` | 자신에게 공속/이속 버프, `pierce` 면 기본 공격이 관통 | `duration`, `attack_speed_pct`, `move_speed_pct`, `pierce` |
-| `dash` | 지정 방향 돌진 + 다음 공격 강화 | `range`, `speed`, `empower_magic` 또는 `empower_damage`(`_ad`) |
-| `ground_aoe` | 지연 후 범위 피해 | `range`, `radius`, `delay`, `damage`, `stun` |
-| `self_aoe` | 내 주변 즉시 범위 피해 | `radius`, `damage` |
-| `counter_shield` | 받은 피해의 일부를 보호막으로 | `duration`, `ratio`, `shield_life` |
-| `knockback` | 밀치기, 벽·구조물에 부딪히면 기절 | `range`, `width`, `knock_distance`, `wall_stun`, `damage` |
-| `teleport_strike` | 먼 지점(미니맵 가능)으로 순간이동 + 에어본 | `range`, `radius`, `airborne`, `damage` |
-| `lifesteal_buff` | 일정 시간 입힌 피해만큼 회복 | `duration`, `pct` |
-| `ghost_walk` | 구조물 통과 + 이속 증가 | `duration`, `move_speed_pct` |
-| `cone` | 부채꼴 피해 + '울림' 표식 | `range`, `angle`, `damage`, `mark_duration` |
-| `echo_guard` | 받는 피해 일부를 나눠서 받기 + 표식당 방어력 | `duration`, `defer_pct`, `defer_time`, `armor_per_mark` |
-| `silence_marked` | 표식이 있는 모든 적 침묵 | `radius`, `silence` |
-| `cage` | 지연 후 대종이 떨어져 적을 가둠 (갇힌 대상은 밖의 아군 회복·보호막 불가) | `range`, `radius`, `delay`, `duration`, `max_targets`, `damage` |
-| `hook_dash` | 갈고리를 걸어 돌진 (부쉬에서 사거리 증가, 빗나가면 쿨타임 환급) | `range`, `bush_range`, `speed`, `dash_speed`, `miss_refund`, `w_window` |
-| `knife_throw` | 단검 던지기 (갈고리 적중 직후엔 부채꼴로 즉시) | `count`, `interval`, `speed`, `fan_angle`, `damage` |
-| `anchor` | 말뚝 설치 → 다시 누르면 말뚝 위치로 복귀 (기본 공격 3번이면 부서짐) | `duration` |
-| `rope_walk` | 공중 외줄을 타고 이동 (타깃 불가) → 내려오며 피해 | `length`, `duration`, `land_radius`, `damage` |
-| `trap` | 보이지 않는 덫 (밟은 적 속박 + 위치 노출) | `range`, `trigger_radius`, `max_traps`, `root`, `reveal` |
-| `ally_heal` | 가장 가까운 아군(나 포함) 회복 | `range`, `heal`, `heal_ap` |
-| `cleanse` | 아군의 CC 제거 + 잠깐 CC 면역 | `range`, `immune` |
-| `team_heal` | 주변 아군 회복 + 잠깐 불사 | `radius`, `heal`, `undying` |
-| `zone` | 지속 장판 (아군 회복, 적 둔화/속박/초당 피해), `delay` 가 있으면 지연 후 생성 | `range`, `radius`, `duration`, `heal_per_sec`, `slow`, `root`, `damage_per_sec`(`_ad`, `damage_type`), `style` |
-| `line_aoe` | 직선 즉시 범위 피해 + 둔화 + 자기 회복 | `range`, `width`, `damage`, `slow`, `heal` |
-| `ally_shield` | 아군 보호막, 깨지면 주변 폭발 | `shield`, `duration`, `burst_damage`, `burst_radius` |
-| `ally_buff` | 아군 공속/이속 | `duration`, `attack_speed_pct`, `move_speed_pct` |
+| `zone` | 지속 장판 (적 둔화 + 초당 피해), `delay` 가 있으면 지연 후 생성 (거미 여왕 W) | `range`, `radius`, `duration`, `slow`, `damage_per_sec`(`_ad`, `damage_type`), `style` |
 | `volley` | 부채꼴로 여러 발을 동시에 발사 (거미 여왕 W) | `count`, `spread`, `range`, `speed`, `damage` |
 | `leap_slam` | 지정 지점으로 도약해 착지 범위 피해 + 둔화 (점프 중 공중 상태). `"aim": "enemy"` 면 적 챔피언을 지정해 뛰어들고 `stun`, `zone`(착지 자리 장판 값) 도 쓸 수 있음 | `range`, `speed`, `radius`, `damage`, `slow`, `slow_duration`, `stun`, `zone` |
 | `cocoon` | 시전 방향과 수직으로 나란히 고치를 놓고, 부화하면 새끼 거미가 적에게 다가가 거미줄 평타로 공격 | `range`, `count`, `spacing`, `hatch`, `cocoon_hp`, `baby_hp`, `max_babies`, `baby_speed`, `baby_ad`, `baby_ad_ratio` |
@@ -411,8 +291,8 @@ KayKit 의 다른 동작을 쓰려면 `model.anim` 에 동작 이름을 적고 `
 | `sky_dive` | `rise` 동안 떠올라(대상 지정 불가) 지정 지점까지 수평 비행(`speed`), 길에 `path_damage`, 착지에 `damage` + 둔화 + `zone` 불길 (용 R) | `range`, `radius`, `rise`, `speed`, `height`, `path_width`, `damage`, `path_damage`, `zone` |
 
 피해 계수는 `ad_ratio`, `bonus_ad_ratio`, `ap_ratio`, 피해 유형은 `damage_type`(`physical`/`magic`/`true`) 입니다.
-회복·보호막처럼 피해가 아닌 수치는 `heal` + `heal_ap` 처럼 `<이름>` + `<이름>_ap`(주문력), `_ad`(공격력) 계수를 씁니다.
-조준 방식(직선/부채꼴/바닥/아군/즉시)은 `type` 에 따라 자동으로 정해지며, 스킬에 `"aim": "ground"` 처럼 적어 바꿀 수 있습니다 (`game/shared/data.py`).
+장판 초당 피해처럼 따로 계산하는 수치는 `damage_per_sec` + `damage_per_sec_ad` 처럼 `<이름>` + `<이름>_ap`(주문력), `_ad`(공격력) 계수를 씁니다.
+조준 방식(직선/부채꼴/바닥/대상/즉시)은 `type` 에 따라 자동으로 정해지며, 스킬에 `"aim": "ground"` 처럼 적어 바꿀 수 있습니다 (`game/shared/data.py`).
 봇이 스킬을 쓰는 우선순위는 챔피언 JSON 의 `bot_priority` (예: `["R", "Q", "E", "W"]`)로 조절합니다.
 새로운 종류의 스킬이 필요하면 `game/server/abilities.py` 에 `@handler("새type")` 함수를 추가하면 됩니다.
 
@@ -421,25 +301,22 @@ KayKit 의 다른 동작을 쓰려면 `model.anim` 에 동작 이름을 적고 `
 ```
 main.py / server.py            실행 진입점
 data/                          챔피언, 아이템, 월드 모델, 효과음(sounds.json) 설정 (JSON)
-assets/models/                 3D 모델 파일 (champions/ = KayKit 기반 챔피언 모델·애니메이션 + CREDITS.md)
+assets/models/                 참고용 3D 모델 파일 (kenney_blocky)
 assets/sounds/                 효과음 (Kenney CC0, CREDITS.md)
 assets/ui/                     스킬·소환사 주문·능력치 아이콘 PNG (game-icons.net CC BY 3.0, CREDITS.md)
 game/shared/                   공용: 상수, 맵 배치, 데이터 로더, 네트워크(줄 단위 JSON over TCP)
 game/server/server.py          로비/방/챔피언 선택/게임 루프 (30틱, 15Hz 스냅샷)
 game/server/sim.py             칼바람 규칙 시뮬레이션 (서버 권한)
-game/server/abilities.py       스킬 종류(type)별 동작 처리 (장판·말뚝·외줄 등 포함)
+game/server/abilities.py       스킬 종류(type)별 동작 처리 (장판·고치 포함)
 game/server/bot.py             봇 AI
 game/client/gl.py              moderngl 렌더러, 카메라, 2D 오버레이
-game/client/models.py          3D 모델 로더 (OBJ / glTF / 뼈대 모델), 모델 라이브러리
-game/client/skin.py            뼈대 애니메이션 데이터(.skin.npz) 읽기, 동작 재생기 (크로스페이드)
-game/client/champ_anim.py      서버 상태(이동·공격·시전·기절·사망 …) → 챔피언 동작 고르기
+game/client/models.py          3D 모델 로더 (OBJ / glTF), 모델 라이브러리
 game/client/rigs/              절차적 애니메이션 리그 (spider.py = 거미 여왕: 다리 IK·자세 섞기, serpent.py = 이무기: 궤적을 따라가는 몸통·S자 목, dragon.py + dragon_assets.py = 용: 네 다리 걷기·접히는 날개·긴 목)
 game/client/audio.py           효과음 재생 (data/sounds.json, 거리·좌우 위치, 음량 설정)
 game/shared/spells.py          소환사 주문 목록 (이름·설명·수치 표시)
-tools/                         모델 변환·제작 도구 (bake_gltf_pose, bake_skin, build_champion_models, export_champion_model), 아이콘·초상화·BGM·이펙트 그림 제작 (build_icons, build_portraits, build_bgm, build_fx_sprites)
-game/client/procedural.py      코드로 만든 미니언·구조물·맵 (새끼 거미 포함)
+tools/                         아이콘·초상화·커서·BGM·이펙트 그림 제작 (build_icons, build_portraits, build_cursors, build_bgm, build_fx_sprites)
+game/client/procedural.py      코드로 만든 미니언·구조물·맵 (새끼 거미·고치·회오리 포함)
 game/client/cursors.py         마우스 커서 (손 / 칼 / 조준경)
-game/client/champion_models.py 코드로 만든 챔피언 7종(숨김), 스킬 투사체·장치 모델
 game/client/scenes/            타이틀, 로비, 방, 챔피언 선택, 인게임 화면
 ```
 
@@ -448,7 +325,7 @@ game/client/scenes/            타이틀, 로비, 방, 챔피언 선택, 인게�
 - 길찾기가 없어 구조물 주변은 단순 회피로 돌아갑니다 (라인이 일자라 큰 문제는 없음).
 - 인터넷(외부망) 접속은 포트포워딩이 필요합니다. 기본은 같은 네트워크(LAN)용입니다.
 - 클라이언트 예측이 없어 지연이 큰 환경에서는 조작이 늦게 느껴질 수 있습니다.
-- 챔피언이 거미 여왕·이무기·용 셋뿐입니다 (기존 7명은 숨김). 경직(스태거) 연출은 옮기지 않았습니다.
+- 챔피언이 거미 여왕·이무기·용 셋뿐입니다. 경직(스태거) 연출은 옮기지 않았습니다.
 
 
 ### 테스트용 치트 (게임 중 키)

@@ -2,18 +2,16 @@
 
 sim.cast() 가 스킬 data 의 "type" 으로 HANDLERS 에서 핸들러를 골라 부른다.
 핸들러는 Cast 를 받아 성공하면 True (마나·재사용 대기시간이 소모됨), 실패하면 False 를 돌려준다.
-cx.cooldown 을 정하면 기본 재사용 대기시간 대신 그 값을 쓴다 (재시전이 있는 스킬이 쓴다).
 
 수치는 data/champions/*.json 의 스킬 항목에서 읽는다. 리스트면 스킬 레벨별 값이다.
   피해량:   damage + ad_ratio / bonus_ad_ratio / ap_ratio
-  그 밖의 수치(회복·보호막 등):  <키> + <키>_ap × 주문력 + <키>_ad × 공격력
+  그 밖의 수치(장판 초당 피해 등):  <키> + <키>_ap × 주문력 + <키>_ad × 공격력
 """
 import math
-import random
 
 from ..shared import data as gamedata
 from ..shared import mapdata
-from .entities import Anchor, Champion, Cocoon, GroundEffect, Minion, Projectile, Zone
+from .entities import Champion, Cocoon, GroundEffect, Minion, Projectile, Zone
 
 HANDLERS = {}
 ZONE_TICK = {}
@@ -26,7 +24,6 @@ class Cast:
         self.x, self.z = x, z           # 마우스가 가리킨 바닥 좌표
         self.ux, self.uz = ux, uz       # 시전자 -> 마우스 방향 (단위 벡터)
         self.d = d                      # 시전자와 마우스 사이 거리
-        self.cooldown = None
 
     def val(self, key, default=0.0):
         return gamedata.rank_value(self.ab, key, self.rank, default)
@@ -56,16 +53,6 @@ def fx(sim, kind, x, z, tm=None, **kw):
     sim.event(**ev)
 
 
-def can_recast(sim, c, ab):
-    """다시 누르면 마나 없이 발동하는 상태인가 (줄 말뚝 복귀, 외줄에서 내려오기)."""
-    typ = ab.get("type")
-    if typ == "anchor":
-        return c.anchor_id in sim.anchors
-    if typ == "rope_walk":
-        return c.rope is not None
-    return False
-
-
 def interrupt(u):
     """공중에 뜨거나 밀려날 때 하던 동작을 끊는다."""
     if isinstance(u, Champion):
@@ -93,557 +80,28 @@ def apply_cc(sim, ab, rank, target):
         target.apply_silence(t, rv(ab, "silence", rank))
 
 
-def nearest_ally(sim, c, x, z, rng):
-    """마우스(x, z) 에서 가장 가까운 아군 챔피언 (자신 포함, 시전 사거리 안)."""
-    best, bd = None, 1e9
-    for a in sim.champions.values():
-        if a.team != c.team or a.dead:
-            continue
-        if a.dist_to(c) > rng + a.radius:
-            continue
-        d = math.hypot(a.x - x, a.z - z)
-        if d < bd:
-            best, bd = a, d
-    return best
-
-
 def rotate(ux, uz, ang):
     ca, sa = math.cos(ang), math.sin(ang)
     return ux * ca - uz * sa, ux * sa + uz * ca
 
-
-# ====================================================================== 공용 타입
-@handler("skillshot")
-def skillshot(cx):
-    """직선 투사체. pierce 면 관통, distance_bonus/distance_full 이면 멀리 날아갈수록 피해 증가."""
-    sim, c, ab = cx.sim, cx.c, cx.ab
-    p = Projectile(sim.new_id(), c.team, c, c.x + cx.ux * 0.6, c.z + cx.uz * 0.6, ab.get("style", "bolt"), ab["speed"])
-    p.dx, p.dz = cx.ux, cx.uz
-    p.remaining = ab["range"]
-    p.width = ab["width"]
-    p.pierce = bool(ab.get("pierce"))
-    base = sim.ability_damage(c, ab, cx.rank)
-    dtype = ab.get("damage_type", "physical")
-    bonus, full = ab.get("distance_bonus", 0.0), ab.get("distance_full", 1.0)
-
-    def on_hit(sim_, target):
-        dmg = base * (1 + bonus * min(1.0, p.traveled / full)) if bonus else base
-        sim_.deal_damage(c, target, dmg, dtype, ability=True)
-        apply_cc(sim_, ab, cx.rank, target)
-    p.on_hit = on_hit
-    sim.projectiles[p.id] = p
-    return True
-
-
-@handler("self_buff")
-def self_buff(cx):
-    sim, c, ab = cx.sim, cx.c, cx.ab
-    dur = cx.val("duration")
-    c.buffs.append({"until": sim.time + dur, "attack_speed_pct": cx.val("attack_speed_pct"),
-                    "move_speed_pct": cx.val("move_speed_pct")})
-    if ab.get("pierce"):
-        c.pierce_until = sim.time + dur             # 기본 공격이 뒤의 적까지 관통
-    c.recompute_stats(sim.time)
-    fx(sim, "buff", c.x, c.z, style=ab.get("style", "buff"), tm=c.team)
-    return True
-
-
-@handler("dash")
-def dash(cx):
-    sim, c, ab = cx.sim, cx.c, cx.ab
-    if c.rooted(sim.time):
-        return False
-    dist = min(cx.d, ab["range"])
-    tx, tz = sim.resolve_position(c.x + cx.ux * dist, c.z + cx.uz * dist, c.radius)
-    emp = None
-    if ab.get("empower_magic"):
-        emp = {"dmg": cx.val("empower_magic") + ab.get("empower_ap_ratio", 0) * c.stats["ap"], "dtype": "magic",
-               "duration": ab.get("empower_duration", 3.0)}
-    elif ab.get("empower_damage"):
-        emp = {"dmg": sim.ability_amount(c, ab, cx.rank, "empower_damage"),
-               "dtype": ab.get("empower_damage_type", "physical"), "duration": ab.get("empower_duration", 3.0)}
-    c.clear_orders()
-    c.dash = {"x": tx, "z": tz, "speed": ab["speed"], "follow": None, "empower": emp}
-    return True
-
-
-@handler("ground_aoe")
-def ground_aoe(cx):
-    sim, c, ab = cx.sim, cx.c, cx.ab
-    gx, gz = cx.ground_point(ab["range"])
-    dmg = sim.ability_damage(c, ab, cx.rank)
-    dtype = ab.get("damage_type", "magic")
-
-    def on_trigger(sim_, eff):
-        for t in sim_.enemies_in_radius(eff.team, eff.x, eff.z, eff.radius):
-            sim_.deal_damage(c, t, dmg, dtype, ability=True)
-            apply_cc(sim_, ab, cx.rank, t)
-        sim_.event(e="fx", fx=eff.style + "_burst", x=round(eff.x, 2), z=round(eff.z, 2), r=eff.radius, tm=eff.team)
-    eff = GroundEffect(sim.new_id(), c.team, c, gx, gz, ab["radius"], sim.time + ab.get("delay", 0.5),
-                       ab.get("style", "aoe"), on_trigger)
-    sim.effects[eff.id] = eff
-    return True
-
-
-# ====================================================================== 1번: 돌진형 탱커
-@handler("self_aoe")
-def self_aoe(cx):
-    """시전자 주변 원형 범위 피해 (+ 둔화·기절 등)."""
-    sim, c, ab = cx.sim, cx.c, cx.ab
-    radius = ab["radius"]
-    dmg = sim.ability_damage(c, ab, cx.rank)
-    dtype = ab.get("damage_type", "physical")
-    for t in sim.enemies_in_radius(c.team, c.x, c.z, radius):
-        sim.deal_damage(c, t, dmg, dtype, ability=True)
-        apply_cc(sim, ab, cx.rank, t)
-    fx(sim, "slam", c.x, c.z, r=radius, style=ab.get("style", "slam"), tm=c.team)
-    return True
-
-
-@handler("counter_shield")
-def counter_shield(cx):
-    """duration 동안 받는 피해의 ratio 만큼 보호막이 쌓인다."""
-    sim, c = cx.sim, cx.c
-    c.counter = {"until": sim.time + cx.val("duration"), "ratio": cx.val("ratio", 0.3),
-                 "life": cx.val("shield_life", 3.0)}
-    fx(sim, "buff", c.x, c.z, style="counter", tm=c.team)
-    return True
-
-
-@handler("knockback")
-def knockback(cx):
-    """전방 직사각형 안의 적을 밀어낸다. 벽·구조물에 부딪히면 스턴."""
-    sim, c, ab = cx.sim, cx.c, cx.ab
-    length, half = ab["range"], ab["width"] / 2
-    dmg = sim.ability_damage(c, ab, cx.rank)
-    dtype = ab.get("damage_type", "physical")
-    dist, speed = cx.val("knock_distance", 3.0), cx.val("knock_speed", 14.0)
-    for u in sim.enemies_in_radius(c.team, c.x, c.z, length + 1.5):
-        rx, rz = u.x - c.x, u.z - c.z
-        along = rx * cx.ux + rz * cx.uz
-        perp = abs(-rx * cx.uz + rz * cx.ux)
-        if not (-0.3 <= along <= length + u.radius and perp <= half + u.radius):
-            continue
-        sim.deal_damage(c, u, dmg, dtype, ability=True)
-        if u.apply_stun(sim.time, dist / speed + 0.05):         # 밀려나는 동안 행동 불가
-            interrupt(u)
-            u.kb = {"dx": cx.ux, "dz": cx.uz, "left": dist, "speed": speed, "stun": cx.val("wall_stun", 1.0)}
-    fx(sim, "knock", c.x, c.z, x2=c.x + cx.ux * length, z2=c.z + cx.uz * length, w=ab["width"], tm=c.team)
-    return True
-
-
-@handler("teleport_strike")
-def teleport_strike(cx):
-    """지정한 먼 지점으로 순간이동해 착지 주변 적을 공중으로 띄운다."""
-    sim, c, ab = cx.sim, cx.c, cx.ab
-    gx, gz = cx.ground_point(ab["range"])
-    ox, oz = c.x, c.z
-    c.x, c.z = sim.resolve_position(gx, gz, c.radius)
-    interrupt(c)
-    dmg = sim.ability_damage(c, ab, cx.rank)
-    for u in sim.enemies_in_radius(c.team, c.x, c.z, ab["radius"]):
-        sim.deal_damage(c, u, dmg, ab.get("damage_type", "physical"), ability=True)
-        apply_cc(sim, ab, cx.rank, u)
-    fx(sim, "teleport", ox, oz, x2=c.x, z2=c.z, tm=c.team)
-    fx(sim, "slam", c.x, c.z, r=ab["radius"], style="land", tm=c.team)
-    return True
-
-
-# ====================================================================== 2번: 근접 브루저
-@handler("lifesteal_buff")
-def lifesteal_buff(cx):
-    sim, c = cx.sim, cx.c
-    c.vamp = {"until": sim.time + cx.val("duration"), "pct": cx.val("pct")}
-    fx(sim, "buff", c.x, c.z, style="vamp", tm=c.team)
-    return True
-
-
-@handler("ghost_walk")
-def ghost_walk(cx):
-    """망령 상태: 구조물을 통과하고 이동 속도가 오른다."""
-    sim, c = cx.sim, cx.c
-    dur = cx.val("duration")
-    c.ghost_until = sim.time + dur
-    c.buffs.append({"until": sim.time + dur, "move_speed_pct": cx.val("move_speed_pct")})
-    c.recompute_stats(sim.time)
-    fx(sim, "buff", c.x, c.z, style="ghost", tm=c.team)
-    return True
-
-
-# ====================================================================== 3번: 소리 탱커
-@handler("cone")
-def cone(cx):
-    """전방 부채꼴 피해 + 울림 표식."""
-    sim, c, ab = cx.sim, cx.c, cx.ab
-    rng = ab["range"]
-    half = math.radians(ab["angle"]) / 2
-    dmg = sim.ability_damage(c, ab, cx.rank)
-    dtype = ab.get("damage_type", "magic")
-    t = sim.time
-    for u in sim.enemies_in_radius(c.team, c.x, c.z, rng):
-        rx, rz = u.x - c.x, u.z - c.z
-        d = math.hypot(rx, rz)
-        if d > 1e-6:
-            ang = math.acos(max(-1.0, min(1.0, (rx * cx.ux + rz * cx.uz) / d)))
-            if ang > half + math.asin(min(1.0, u.radius / d)):
-                continue
-        sim.deal_damage(c, u, dmg, dtype, ability=True)
-        if ab.get("mark_duration"):
-            u.marks["resonance"] = (t + cx.val("mark_duration"), c.id)
-        apply_cc(sim, ab, cx.rank, u)
-    fx(sim, "cone", c.x, c.z, a=math.atan2(cx.uz, cx.ux), r=rng, w=ab["angle"], tm=c.team)
-    return True
-
-
-@handler("echo_guard")
-def echo_guard(cx):
-    """duration 동안 받는 피해의 일부를 나눠 받고, 표식이 있는 적 수만큼 방어력 증가."""
-    sim, c = cx.sim, cx.c
-    c.echo = {"until": sim.time + cx.val("duration"), "pct": cx.val("defer_pct", 0.3),
-              "time": cx.val("defer_time", 3.0), "armor_per_mark": cx.val("armor_per_mark")}
-    fx(sim, "buff", c.x, c.z, style="echo", tm=c.team)
-    return True
-
-
-@handler("silence_marked")
-def silence_marked(cx):
-    """울림 표식이 있는 주변 적을 침묵시키고 표식을 모두 지운다."""
-    sim, c, ab = cx.sim, cx.c, cx.ab
-    t = sim.time
-    radius = ab["radius"]
-    targets = [e for e in sim.champions.values()
-               if e.team != c.team and not e.dead and not e.untargetable(t) and e.mark_of("resonance", t, c.id)
-               and c.dist_to(e) <= radius + e.radius]
-    if not targets:
-        return False                                # 표식이 하나도 없으면 시전되지 않는다
-    for e in targets:
-        e.apply_silence(t, cx.val("silence", 1.0))
-    for u in list(sim.champions.values()) + list(sim.minions.values()):
-        m = u.marks.get("resonance")
-        if m and m[1] == c.id:
-            del u.marks["resonance"]
-    fx(sim, "silence_ring", c.x, c.z, r=radius, tm=c.team)
-    return True
-
-
-@handler("cage")
-def cage(cx):
-    """지정 지점에 범종을 떨어뜨려 범위 안의 적 챔피언을 최대 N명까지 가두고, 풀릴 때 피해를 준다."""
-    sim, c, ab = cx.sim, cx.c, cx.ab
-    gx, gz = cx.ground_point(ab["range"])
-    radius = ab["radius"]
-    dmg = sim.ability_damage(c, ab, cx.rank)
-    dtype = ab.get("damage_type", "magic")
-    dur = cx.val("duration")
-
-    def on_trigger(sim_, eff):
-        t = sim_.time
-        cands = [u for u in sim_.champions.values()
-                 if u.team != c.team and not u.dead and not u.untargetable(t) and not sim_.is_caged(u)
-                 and math.hypot(u.x - gx, u.z - gz) <= radius + u.radius]
-        cands.sort(key=lambda u: math.hypot(u.x - gx, u.z - gz))
-        chosen = cands[:int(ab.get("max_targets", 2))]
-        fx(sim_, "bell_drop", gx, gz, r=radius, tm=c.team)
-        if not chosen:
-            return
-        z = Zone(sim_.new_id(), "cage", c.team, c, gx, gz, radius, t + dur, ab.get("style", "cage"),
-                 data={"ids": [u.id for u in chosen], "dmg": dmg, "dtype": dtype})
-        z.born = t
-        sim_.zones[z.id] = z
-        for u in chosen:
-            u.cage_id = z.id
-            u.caged_until = z.until
-    eff = GroundEffect(sim.new_id(), c.team, c, gx, gz, radius, sim.time + cx.val("delay", 0.8), "bell", on_trigger)
-    sim.effects[eff.id] = eff
-    return True
-
-
-def tick_cage(sim, z, dt):
-    for uid in z.data["ids"]:
-        u = sim.champions.get(uid)
-        if u is None or u.dead or u.cage_id != z.id:
-            continue
-        dx, dz = u.x - z.x, u.z - z.z
-        d = math.hypot(dx, dz)
-        lim = max(0.3, z.radius - u.radius)
-        if d > lim:                                  # 종 밖으로 나갈 수 없다
-            u.x, u.z = z.x + dx / d * lim, z.z + dz / d * lim
-
-
-def end_cage(sim, z):
-    for uid in z.data["ids"]:
-        u = sim.champions.get(uid)
-        if u is None or u.cage_id != z.id:
-            continue
-        u.caged_until = 0.0
-        u.cage_id = None
-        if not u.dead:
-            sim.deal_damage(z.owner, u, z.data["dmg"], z.data["dtype"], ability=True)
-    fx(sim, "cage_end", z.x, z.z, r=z.radius, tm=z.owner.team)
-
-
-# ====================================================================== 4번: 줄타기 암살자
-@handler("hook_dash")
-def hook_dash(cx):
-    """줄을 던져 맞은 적에게 날아붙는다. 부쉬 안(나온 뒤 잠깐 포함)에서는 사거리가 늘어난다."""
-    sim, c, ab = cx.sim, cx.c, cx.ab
-    t = sim.time
-    in_bush = mapdata.bush_at(c.x, c.z) >= 0 or t < c.bush_until
-    rng = ab["bush_range"] if in_bush else ab["range"]
-    p = Projectile(sim.new_id(), c.team, c, c.x + cx.ux * 0.5, c.z + cx.uz * 0.5, "hook", ab["speed"])
-    p.dx, p.dz = cx.ux, cx.uz
-    p.remaining = rng
-    p.width = ab["width"]
-    dmg = sim.ability_damage(c, ab, cx.rank)
-
-    def on_hit(sim_, target):
-        sim_.deal_damage(c, target, dmg, "physical", ability=True)
-        c.q_hit_until = sim_.time + ab.get("w_window", 2.0)          # 이 안에 W 를 쓰면 즉발
-        if not c.dead and not c.rooted(sim_.time) and target.alive:
-            c.clear_orders()
-            c.dash = {"x": target.x, "z": target.z, "speed": ab.get("dash_speed", 28.0), "follow": target.id,
-                      "empower": None}
-
-    def on_miss(sim_, proj):
-        refund = ab.get("miss_refund", 0.3) * c.cooldown_of(cx.slot)
-        c.ready_at[cx.slot] = max(sim_.time, c.ready_at[cx.slot] - refund)
-    p.on_hit, p.on_miss = on_hit, on_miss
-    sim.projectiles[p.id] = p
-    return True
-
-
-@handler("knife_throw")
-def knife_throw(cx):
-    """칼 N자루. 평소엔 간격을 두고 느리게, Q 적중 직후/줄 위에서는 근거리 부채꼴로 즉발."""
-    sim, c, ab = cx.sim, cx.c, cx.ab
-    instant = sim.time < c.q_hit_until or c.rope is not None
-    dmg = sim.ability_damage(c, ab, cx.rank)
-    count = int(ab.get("count", 3))
-
-    def launch(sim_, dx, dz, speed, rng, style, width=0.5):
-        if c.dead:
-            return
-        p = Projectile(sim_.new_id(), c.team, c, c.x + dx * 0.5, c.z + dz * 0.5, style, speed)
-        p.dx, p.dz = dx, dz
-        p.remaining = rng
-        p.width = width
-        p.on_hit = lambda s_, tg: s_.deal_damage(c, tg, dmg, "physical", ability=True)
-        sim_.projectiles[p.id] = p
-
-    if instant:
-        fan = math.radians(ab.get("fan_angle", 16))
-        for i in range(count):
-            ang = 0.0 if count == 1 else -fan + 2 * fan * i / (count - 1)
-            dx, dz = rotate(cx.ux, cx.uz, ang)
-            launch(sim, dx, dz, ab.get("fast_speed", 40.0), ab.get("fast_range", 4.5), "knife_fast", 0.8)
-        c.q_hit_until = 0.0
-        fx(sim, "knife_burst", c.x, c.z, a=math.atan2(cx.uz, cx.ux), tm=c.team)
-    else:
-        interval = ab.get("interval", 0.4)
-        for i in range(count):
-            args = (cx.ux, cx.uz, ab.get("speed", 11.0), ab.get("range", 8.0), "knife")
-            if i == 0:
-                launch(sim, *args)
-            else:
-                sim.schedule(i * interval, lambda s_, a=args: launch(s_, *a))
-    return True
-
-
 def remove_anchor(sim, a, hatch=False):
+    """새끼 거미 고치: 시간이 다 되면 부화, 부서지면 그냥 터진다."""
     if sim.anchors.pop(a.id, None) is None:
         return
     a.alive = False
-    if getattr(a, "cocoon", False):                       # 새끼 거미 고치: 시간이 다 되면 부화, 부서지면 그냥 터진다
-        if hatch:
-            hatch_cocoon(sim, a)
-        else:
-            fx(sim, "cocoon_break", a.x, a.z, tm=a.owner.team)
-        return
-    owner = a.owner
-    if owner.anchor_id == a.id:
-        owner.anchor_id = None
-        slot = a.slot
-        # 쿨타임은 복귀하거나 말뚝이 사라진 뒤부터 돈다
-        owner.ready_at[slot] = max(owner.ready_at[slot], sim.time + owner.cooldown_of(slot))
-    fx(sim, "anchor_break", a.x, a.z, tm=owner.team)
+    if hatch:
+        hatch_cocoon(sim, a)
+    else:
+        fx(sim, "cocoon_break", a.x, a.z, tm=a.owner.team)
 
 
 def anchor_destroyed(sim, a):
     remove_anchor(sim, a)
 
 
-@handler("anchor")
-def anchor(cx):
-    """줄 말뚝 설치. 말뚝이 남아 있을 때 다시 쓰면 말뚝 위치로 즉시 돌아간다."""
-    sim, c, ab = cx.sim, cx.c, cx.ab
-    a = sim.anchors.get(c.anchor_id) if c.anchor_id else None
-    if a is not None:
-        ox, oz = c.x, c.z
-        c.x, c.z = sim.resolve_position(a.x, a.z, c.radius)
-        interrupt(c)
-        fx(sim, "rope_pull", ox, oz, x2=c.x, z2=c.z, tm=c.team)
-        remove_anchor(sim, a)
-        return True
-    a = Anchor(sim.new_id(), c.team, c, c.x, c.z, sim.time + cx.val("duration"))
-    a.slot = cx.slot
-    sim.anchors[a.id] = a
-    c.anchor_id = a.id
-    cx.cooldown = 0.6                       # 재시전까지 잠깐만 막고, 진짜 쿨타임은 말뚝이 사라질 때 시작
-    fx(sim, "anchor_set", c.x, c.z, tm=c.team)
-    return True
-
-
-@handler("rope_walk")
-def rope_walk(cx):
-    """공중에 외줄을 걸고 올라가 걷는다. 줄 위에서는 대상으로 지정되지 않는다. 다시 누르면 내려온다."""
-    sim, c, ab = cx.sim, cx.c, cx.ab
-    if c.rope:
-        end_rope(sim, c)
-        return True
-    length = cx.val("length", 8.0)
-    x0, z0 = c.x, c.z
-    x1, z1 = mapdata.clamp_to_map(x0 + cx.ux * length, z0 + cx.uz * length, c.radius)
-    total = math.hypot(x1 - x0, z1 - z0)
-    if total < 1.5:
-        return False
-    until = sim.time + cx.val("duration")
-    c.rope = {"x0": x0, "z0": z0, "x1": x1, "z1": z1, "dx": (x1 - x0) / total, "dz": (z1 - z0) / total,
-              "len": total, "s": 0.0, "until": until, "ab": ab, "rank": cx.rank, "slot": cx.slot}
-    c.untarget_until = until + 0.05
-    interrupt(c)
-    cx.cooldown = 0.5                       # 진짜 쿨타임은 내려온 뒤부터
-    fx(sim, "rope_up", x0, z0, x2=x1, z2=z1, tm=c.team)
-    return True
-
-
-def update_rope(sim, c, dt):
-    r = c.rope
-    c.attack_target = None
-    c.windup = None
-    if sim.time >= r["until"]:
-        end_rope(sim, c)
-        return
-    moving = False
-    if c.move_target:
-        tx, tz = c.move_target
-        s_target = max(0.0, min(r["len"], (tx - r["x0"]) * r["dx"] + (tz - r["z0"]) * r["dz"]))
-        ds = s_target - r["s"]
-        step = c.stats["move_speed"] * dt
-        if abs(ds) <= step:
-            r["s"] = s_target
-            c.move_target = None
-        else:
-            r["s"] += step if ds > 0 else -step
-            moving = True
-        sign = 1.0 if ds >= 0 else -1.0
-        c.facing = math.atan2(r["dz"] * sign, r["dx"] * sign)
-    c.x = r["x0"] + r["dx"] * r["s"]
-    c.z = r["z0"] + r["dz"] * r["s"]
-    c.anim = 1 if moving else 0
-
-
-def end_rope(sim, c, land=True):
-    r = c.rope
-    if not r:
-        return
-    c.rope = None
-    c.untarget_until = 0.0
-    c.move_target = None
-    ab, rank = r["ab"], r["rank"]
-    c.ready_at[r["slot"]] = sim.time + c.cooldown_of(r["slot"])
-    if land and not c.dead:
-        dmg = sim.ability_damage(c, ab, rank)
-        for u in sim.enemies_in_radius(c.team, c.x, c.z, ab["land_radius"]):
-            sim.deal_damage(c, u, dmg, ab.get("damage_type", "physical"), ability=True)
-            apply_cc(sim, ab, rank, u)
-        fx(sim, "slam", c.x, c.z, r=ab["land_radius"], style="land", tm=c.team)
-
-
-# ====================================================================== 5번: 원거리 지속딜러
-@handler("trap")
-def trap(cx):
-    """바닥에 덫을 숨겨 둔다 (적에게는 안 보임). 적 챔피언이 밟으면 속박 + 위치 노출."""
-    sim, c, ab = cx.sim, cx.c, cx.ab
-    gx, gz = cx.ground_point(ab["range"])
-    mine = [z for z in sim.zones.values() if z.kind == "trap" and z.owner is c]
-    mine.sort(key=lambda z: z.born)
-    while len(mine) >= int(ab.get("max_traps", 2)):
-        sim.end_zone(mine.pop(0))
-    t = sim.time
-    z = Zone(sim.new_id(), "trap", c.team, c, gx, gz, ab.get("trigger_radius", 1.1), t + ab.get("lifetime", 40.0),
-             "trap", hidden=True,
-             data={"armed_at": t + ab.get("arm_delay", 0.6), "root": cx.val("root", 1.0),
-                   "reveal": cx.val("reveal", 4.0), "dmg": sim.ability_damage(c, ab, cx.rank) if ab.get("damage") else 0.0,
-                   "dtype": ab.get("damage_type", "physical")})
-    z.born = t
-    sim.zones[z.id] = z
-    fx(sim, "trap_set", gx, gz, pv=c.team, tm=c.team)          # 숨긴 덫 설치는 아군에게만 알린다
-    return True
-
-
-def tick_trap(sim, z, dt):
-    t = sim.time
-    if t < z.data["armed_at"]:
-        return
-    for u in sim.champions.values():
-        if u.team == z.team or u.dead or u.untargetable(t):
-            continue
-        if math.hypot(u.x - z.x, u.z - z.z) <= z.radius + u.radius:
-            u.apply_root(t, z.data["root"])
-            u.revealed_until = max(u.revealed_until, t + z.data["reveal"])
-            if z.data["dmg"] > 0:
-                sim.deal_damage(z.owner, u, z.data["dmg"], z.data["dtype"], ability=True)
-            fx(sim, "trap_snap", z.x, z.z, tm=z.owner.team)
-            sim.end_zone(z)
-            return
-
-
-# ====================================================================== 6번·7번: 힐러
-def _pick(cx, rng):
-    return nearest_ally(cx.sim, cx.c, cx.x, cx.z, rng)
-
-
-@handler("ally_heal")
-def ally_heal(cx):
-    sim, c, ab = cx.sim, cx.c, cx.ab
-    tg = _pick(cx, ab["range"])
-    if tg is None:
-        return False
-    sim.heal(tg, sim.ability_amount(c, ab, cx.rank, "heal"), c)
-    fx(sim, "heal", tg.x, tg.z, tm=c.team)
-    return True
-
-
-@handler("cleanse")
-def cleanse(cx):
-    """아군 한 명의 군중 제어를 풀고 잠깐 면역을 준다."""
-    sim, c, ab = cx.sim, cx.c, cx.ab
-    tg = _pick(cx, ab["range"])
-    if tg is None:
-        return False
-    tg.cleanse(sim.time)
-    tg.cc_immune_until = sim.time + cx.val("immune", 1.0)
-    fx(sim, "cleanse", tg.x, tg.z, tm=c.team)
-    return True
-
-
-@handler("team_heal")
-def team_heal(cx):
-    """주변 모든 아군을 크게 회복시키고 잠깐 죽지 않게 한다."""
-    sim, c, ab = cx.sim, cx.c, cx.ab
-    amt = sim.ability_amount(c, ab, cx.rank, "heal")
-    undying = cx.val("undying", 0.0)
-    for a in sim.allies_in_radius(c.team, c.x, c.z, ab["radius"]):
-        sim.heal(a, amt, c)
-        if undying:
-            a.undying_until = max(a.undying_until, sim.time + undying)
-    fx(sim, "holy", c.x, c.z, r=ab["radius"], tm=c.team)
-    return True
-
-
 @handler("zone")
 def zone(cx):
-    """바닥에 장판을 깐다: 안의 아군은 지속 회복, 안의 적은 둔화 (+ 처음에 속박)."""
+    """바닥에 장판을 깐다: 안의 적은 둔화 + 지속 피해."""
     sim, c, ab = cx.sim, cx.c, cx.ab
     gx, gz = cx.ground_point(ab["range"])
     spawn_zone(sim, c, ab, cx.rank, gx, gz)
@@ -651,15 +109,13 @@ def zone(cx):
 
 
 def spawn_zone(sim, c, ab, rank, gx, gz):
-    """(gx, gz) 에 장판을 만든다 (ab 의 radius / duration / slow / heal_per_sec / damage_per_sec ...). 점프 내려찍기도 이걸 쓴다."""
+    """(gx, gz) 에 장판을 만든다 (ab 의 radius / duration / slow / damage_per_sec ...). 점프 내려찍기도 이걸 쓴다."""
     radius = ab["radius"]
     rv = gamedata.rank_value
     dur = rv(ab, "duration", rank)
-    data = {"slow": rv(ab, "slow", rank), "heal_ps": sim.ability_amount(c, ab, rank, "heal_per_sec"),
-            "acc": {}, "next_ev": 0.0,
+    data = {"slow": rv(ab, "slow", rank),
             "dps": sim.ability_amount(c, ab, rank, "damage_per_sec"), "dtype": ab.get("damage_type", "magic"),
             "dps_next": 0.0}
-    root = rv(ab, "root", rank)
     style = ab.get("style", "zone")
 
     def spawn(sim_, eff=None):
@@ -667,9 +123,6 @@ def spawn_zone(sim, c, ab, rank, gx, gz):
         z = Zone(sim_.new_id(), "aura", c.team, c, gx, gz, radius, t + dur, style, data=data)
         z.born = t
         sim_.zones[z.id] = z
-        if root:
-            for u in sim_.enemies_in_radius(c.team, gx, gz, radius):
-                u.apply_root(t, root)
         fx(sim_, "zone_start", gx, gz, r=radius, style=style, tm=c.team)
     delay = ab.get("delay", 0.0)
     if delay > 0:
@@ -683,10 +136,6 @@ def tick_aura(sim, z, dt):
     t = sim.time
     d = z.data
     owner = z.owner
-    if d["heal_ps"] > 0:
-        for a in sim.allies_in_radius(z.team, z.x, z.z, z.radius):
-            gained = sim.heal(a, d["heal_ps"] * dt, owner, quiet=True)
-            d["acc"][a.id] = d["acc"].get(a.id, 0.0) + gained
     if d["slow"]:
         for u in sim.enemies_in_radius(z.team, z.x, z.z, z.radius):
             u.apply_slow(t, d["slow"], 0.4)
@@ -694,71 +143,6 @@ def tick_aura(sim, z, dt):
         d["dps_next"] = t + 0.5
         for u in sim.enemies_in_radius(z.team, z.x, z.z, z.radius):
             sim.deal_damage(owner, u, d["dps"] * 0.5, d["dtype"], ability=True)
-    if t >= d["next_ev"]:                                   # 회복량 숫자는 1초에 한 번만 보여 준다
-        d["next_ev"] = t + 1.0
-        for uid, amt in d["acc"].items():
-            if amt >= 1.0:
-                sim.event(e="heal", d=uid, v=int(round(amt)))
-        d["acc"] = {}
-
-
-@handler("line_aoe")
-def line_aoe(cx):
-    """전방 직선(덩굴): 적은 피해+둔화, 아군은 회복."""
-    sim, c, ab = cx.sim, cx.c, cx.ab
-    length, half = ab["range"], ab["width"] / 2
-    dmg = sim.ability_damage(c, ab, cx.rank)
-    heal = sim.ability_amount(c, ab, cx.rank, "heal")
-
-    def inside(u):
-        rx, rz = u.x - c.x, u.z - c.z
-        along = rx * cx.ux + rz * cx.uz
-        perp = abs(-rx * cx.uz + rz * cx.ux)
-        return 0.0 <= along <= length + u.radius and perp <= half + u.radius
-    for u in sim.enemies_in_radius(c.team, c.x, c.z, length + 1.0):
-        if inside(u):
-            sim.deal_damage(c, u, dmg, ab.get("damage_type", "magic"), ability=True)
-            apply_cc(sim, ab, cx.rank, u)
-    if heal > 0:
-        for a in sim.allies_in_radius(c.team, c.x, c.z, length + 1.0):
-            if a is not c and inside(a):
-                sim.heal(a, heal, c)
-    fx(sim, "vine", c.x, c.z, x2=c.x + cx.ux * length, z2=c.z + cx.uz * length, w=ab["width"], tm=c.team)
-    return True
-
-
-@handler("ally_shield")
-def ally_shield(cx):
-    """아군에게 꽃잎 보호막. 보호막이 깨지면 주변 적에게 피해."""
-    sim, c, ab = cx.sim, cx.c, cx.ab
-    tg = _pick(cx, ab["range"])
-    if tg is None:
-        return False
-    burst = sim.ability_amount(c, ab, cx.rank, "burst_damage")
-    radius = ab.get("burst_radius", 3.0)
-
-    def on_break(sim_, unit):
-        for u in sim_.enemies_in_radius(c.team, unit.x, unit.z, radius):
-            sim_.deal_damage(c, u, burst, ab.get("damage_type", "magic"), ability=True)
-        fx(sim_, "petal_burst", unit.x, unit.z, r=radius, tm=c.team)
-    if not sim.add_shield(tg, sim.ability_amount(c, ab, cx.rank, "shield"), cx.val("duration"), c,
-                          on_break if burst > 0 else None):
-        return False
-    fx(sim, "shield", tg.x, tg.z, tm=c.team)
-    return True
-
-
-@handler("ally_buff")
-def ally_buff(cx):
-    sim, c, ab = cx.sim, cx.c, cx.ab
-    tg = _pick(cx, ab["range"])
-    if tg is None:
-        return False
-    tg.buffs.append({"until": sim.time + cx.val("duration"), "attack_speed_pct": cx.val("attack_speed_pct"),
-                     "move_speed_pct": cx.val("move_speed_pct")})
-    tg.recompute_stats(sim.time)
-    fx(sim, "wind", tg.x, tg.z, tm=c.team)
-    return True
 
 
 # ====================================================================== 8번: 동굴 여왕 거미 (보스러시 이식)
@@ -885,8 +269,7 @@ def hatch_cocoon(sim, a):
     fx(sim, "cocoon_hatch", a.x, a.z, tm=c.team)
 
 
-ZONE_TICK.update({"aura": tick_aura, "trap": tick_trap, "cage": tick_cage})
-ZONE_END.update({"cage": end_cage})
+ZONE_TICK.update({"aura": tick_aura})
 
 
 # ====================================================================== 이무기 (보스러시 2층 보스에서 옮김)

@@ -25,16 +25,6 @@ OUT = os.path.join(ROOT, "assets", "ui")
 
 # 챔피언 id -> {스킬 키: "작가/아이콘 이름"}
 SKILLS = {
-    "vanguard": {"Q": "lorc/groundbreaker", "W": "lorc/shield-reflect", "E": "delapouite/push",
-                 "R": "lorc/meteor-impact"},
-    "reaper": {"Q": "lorc/pretty-fangs", "W": "lorc/scythe", "E": "lorc/spectre", "R": "lorc/chained-heart"},
-    "monk": {"Q": "lorc/ringing-bell", "W": "lorc/shield-echoes", "E": "lorc/silence", "R": "lorc/bell-shield"},
-    "acrobat": {"Q": "delapouite/hook", "W": "lorc/thrown-daggers", "E": "delapouite/stake-hammer",
-                "R": "delapouite/tightrope"},
-    "hunter": {"Q": "lorc/lightning-bow", "W": "lorc/wolf-trap", "E": "delapouite/jump-across",
-               "R": "lorc/fast-arrow"},
-    "cleric": {"Q": "delapouite/healing", "W": "lorc/sun-radiations", "E": "lorc/bubbles", "R": "lorc/angel-wings"},
-    "druid": {"Q": "lorc/vine-whip", "W": "lorc/lotus", "E": "lorc/whirlwind", "R": "delapouite/circle-forest"},
     "spider": {"Q": "lorc/divergence", "W": "lorc/spider-web", "E": "sbed/big-egg", "R": "@spider_leap"},
     "serpent": {"Q": "lorc/droplet-splash", "W": "lorc/bestial-fangs", "E": "lorc/earth-spit", "R": "@serpent_dive"},
     "dragon": {"Q": "lorc/fire-zone", "W": "lorc/wind-slap", "E": "lorc/bat-wing", "R": "lorc/burning-meteor"},

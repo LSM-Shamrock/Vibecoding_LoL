@@ -86,38 +86,6 @@ void main() {
 }
 """
 
-MAX_BONES = 32      # tools/bake_skin.py 의 MAX_JOINTS 와 같아야 한다
-
-# 뼈대 애니메이션용 정점 셰이더: 정점마다 뼈 4개의 행렬을 가중치로 섞어 움직인다.
-# 뼈 행렬에는 "키 맞추기 + 발밑 정렬" 변환이 이미 곱해져 있다 (tools/bake_skin.py).
-MESH_SKIN_VS = """
-#version 330
-uniform mat4 u_vp;
-uniform mat4 u_model;
-uniform mat4 bones[%d];
-in vec3 in_pos;
-in vec3 in_nrm;
-in vec3 in_col;
-in vec2 in_uv;
-in vec4 in_joints;
-in vec4 in_weights;
-out vec3 v_nrm;
-out vec3 v_col;
-out vec2 v_uv;
-out vec3 v_wpos;
-void main() {
-    ivec4 j = ivec4(in_joints + 0.5);
-    mat4 sk = bones[j.x] * in_weights.x + bones[j.y] * in_weights.y
-            + bones[j.z] * in_weights.z + bones[j.w] * in_weights.w;
-    vec4 w = u_model * (sk * vec4(in_pos, 1.0));
-    v_wpos = w.xyz;
-    v_nrm = mat3(u_model) * (mat3(sk) * in_nrm);
-    v_col = in_col;
-    v_uv = in_uv;
-    gl_Position = u_vp * w;
-}
-""" % MAX_BONES
-
 OVERLAY_VS = """
 #version 330
 in vec2 in_pos;
@@ -235,30 +203,6 @@ class Mesh:
             vbo.release()
 
 
-class SkinnedMesh:
-    """뼈대 애니메이션 메시. parts: [(정점 배열 (N,11), 뼈 정보 (N,8: 뼈번호 4 + 가중치 4), 텍스처 또는 None)]."""
-
-    skinned = True
-
-    def __init__(self, renderer, parts, bounds=None):
-        self.parts = []   # (vao, vbo, texture or None) — Mesh 와 같은 모양이라 Renderer.draw 의 반복문을 공유한다
-        ctx = renderer.ctx
-        for arr, jw, tex in parts:
-            if len(arr) == 0:
-                continue
-            data = np.ascontiguousarray(np.concatenate([arr, jw], axis=1), dtype="f4")
-            vbo = ctx.buffer(data.tobytes())
-            vao = ctx.vertex_array(renderer.prog_skin, [(vbo, "3f 3f 3f 2f 4f 4f", "in_pos", "in_nrm", "in_col", "in_uv",
-                                                         "in_joints", "in_weights")])
-            self.parts.append((vao, vbo, tex))
-        self.bounds = bounds
-
-    def release(self):
-        for vao, vbo, tex in self.parts:
-            vao.release()
-            vbo.release()
-
-
 def bounds_of(arr):
     if len(arr) == 0:
         return (np.zeros(3), np.zeros(3))
@@ -320,17 +264,15 @@ class Renderer:
         self.width = width
         self.height = height
         self.prog = ctx.program(vertex_shader=MESH_VS, fragment_shader=MESH_FS)
-        self.prog_skin = ctx.program(vertex_shader=MESH_SKIN_VS, fragment_shader=MESH_FS)   # 뼈대 애니메이션 모델
         light = tuple(np.array([-0.35, -1.0, -0.45]) / np.linalg.norm([-0.35, -1.0, -0.45]))
-        for prog in (self.prog, self.prog_skin):
-            prog["u_light"].value = light
-            prog["u_fog_color"].value = (0.70, 0.84, 1.0)
-            prog["u_fog"].value = 0.0           # 우주 배경: 안개 없음
-            prog["u_tex"].value = 0
-            prog["u_soft"].value = False
-            prog["u_dbl"].value = False
+        prog = self.prog
+        prog["u_light"].value = light
+        prog["u_fog_color"].value = (0.70, 0.84, 1.0)
+        prog["u_fog"].value = 0.0           # 우주 배경: 안개 없음
+        prog["u_tex"].value = 0
+        prog["u_soft"].value = False
+        prog["u_dbl"].value = False
         self._uni = {}                      # id(프로그램) -> ({유니폼 이름: 핸들}, {지난번 값})
-        self._ident_bones = np.tile(np.eye(4, dtype="f4").T.reshape(-1), MAX_BONES).tobytes()
         self.camera = Camera(width, height)
         self._white = ctx.texture((1, 1), 4, b"\xff\xff\xff\xff")
         self.overlay = Overlay(ctx, width, height)
@@ -379,28 +321,24 @@ class Renderer:
         self.ctx.fbo.depth_mask = True
         vp = gl_bytes(cam.vp)
         eye = tuple(float(v) for v in cam.eye())
-        for prog in (self.prog, self.prog_skin):
-            prog["u_vp"].write(vp)
-            if self.vision:
-                tex, rect = self.vision
-                tex.use(1)
-                prog["u_vis"].value = 1
-                prog["u_vis_rect"].value = rect
-                prog["u_use_vis"].value = True
-            else:
-                prog["u_use_vis"].value = False
-            prog["u_cam"].value = eye
+        prog = self.prog
+        prog["u_vp"].write(vp)
+        if self.vision:
+            tex, rect = self.vision
+            tex.use(1)
+            prog["u_vis"].value = 1
+            prog["u_vis_rect"].value = rect
+            prog["u_use_vis"].value = True
+        else:
+            prog["u_use_vis"].value = False
+        prog["u_cam"].value = eye
 
     y_offset = 0.0
 
-    def draw(self, mesh, model, tint=(1, 1, 1, 1), emissive=(0, 0, 0), unlit=0.0, bones=None, soft=False):
-        """bones: 뼈대 모델(SkinnedMesh)일 때 뼈 행렬 묶음 (game/client/skin.py 의 Animator.bones())."""
+    def draw(self, mesh, model, tint=(1, 1, 1, 1), emissive=(0, 0, 0), unlit=0.0, soft=False):
         if mesh is None:
             return
         prog = self.prog
-        if getattr(mesh, "skinned", False):
-            prog = self.prog_skin
-            prog["bones"].write(bones if bones is not None else self._ident_bones)
         if self.y_offset:
             model = model.copy()
             model[1, 3] += self.y_offset            # 리그 챔피언 에어본 등: 그리는 전체를 위로 띄운다
@@ -430,7 +368,7 @@ class Renderer:
                 uni["u_use_tex"].value = last["x"] = ut
             vao.render(moderngl.TRIANGLES)
 
-    def draw_transparent(self, mesh, model, tint, emissive=(0, 0, 0), unlit=1.0, additive=False, bones=None):
+    def draw_transparent(self, mesh, model, tint, emissive=(0, 0, 0), unlit=1.0, additive=False):
         """지면 장식/이펙트용: 깊이 쓰기 없이 블렌딩.
         (깊이 쓰기는 Context 가 아니라 Framebuffer 의 depth_mask 로 끈다. 예전에는 ctx.depth_mask 라고 써서
         아무 효과가 없었고, 투명한 먼지 그림의 네모 전체가 깊이를 써서 뒤에 그리는 이펙트를 네모로 잘라 먹었다.)"""
@@ -438,7 +376,7 @@ class Renderer:
         fbo.depth_mask = False
         if additive:
             self.ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE
-        self.draw(mesh, model, tint, emissive, unlit, bones, soft=True)
+        self.draw(mesh, model, tint, emissive, unlit, soft=True)
         self.ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
         fbo.depth_mask = True
 

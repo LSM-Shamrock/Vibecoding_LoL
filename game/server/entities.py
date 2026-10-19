@@ -28,14 +28,10 @@ class Unit:
         self.silence_until = 0.0    # 침묵: 스킬 시전 불가
         self.airborne_until = 0.0   # 에어본 (기절과 함께 걸리며 표시용)
         self.cc_immune_until = 0.0  # 군중 제어 면역
-        self.untarget_until = 0.0   # 대상 지정 불가 (줄 위를 걷는 동안 등)
+        self.untarget_until = 0.0   # 대상 지정 불가 (땅속·하늘에 있는 동안)
         self.ghost_until = 0.0      # 망령 상태: 구조물을 통과
-        self.revealed_until = 0.0   # 부쉬·안개와 상관없이 적에게 위치가 드러남
-        self.marks = {}             # {표식 이름: (만료 시각, 건 챔피언 id)}
         self.kb = None              # 넉백 중: {"dx","dz","left","speed","stun"}
-        self.shields = []           # [{"amount","until","on_break"}] 오래된 것부터 소모
-        self.caged_until = 0.0      # 대종에 갇힘
-        self.cage_id = None
+        self.shields = []           # [{"amount","until"}] 오래된 것부터 소모
 
     # ---- 상태이상 ----
     def stunned(self, t):
@@ -98,13 +94,6 @@ class Unit:
         self.shields = [s for s in self.shields if s["until"] > t and s["amount"] > 0.01]
         return sum(s["amount"] for s in self.shields)
 
-    def mark_of(self, name, t, owner_id=None):
-        """유효한 표식이 있으면 (만료, 건 챔피언 id), 없으면 None."""
-        m = self.marks.get(name)
-        if m and m[0] > t and (owner_id is None or m[1] == owner_id):
-            return m
-        return None
-
     def dist_to(self, other):
         return math.hypot(other.x - self.x, other.z - self.z)
 
@@ -139,21 +128,6 @@ class Champion(Unit):
         self.ready_at = {"Q": 0.0, "W": 0.0, "E": 0.0, "R": 0.0, "D": 0.0, "F": 0.0}
 
         self.buffs = []              # [{"until", "attack_speed_pct", "move_speed_pct"}]
-        self.empower = None          # {"until", "dmg", "dtype"} 다음 기본 공격 강화
-        self.attack_count = 0
-
-        # 스킬이 거는 상태
-        self.counter = None          # 반격의 방어막 {"until","ratio","life"}
-        self.echo = None             # 메아리 {"until","pct","time","armor_per_mark"}
-        self.deferred = []           # 메아리로 나눠 받는 피해 [{"left","rate","src"}]
-        self.vamp = None             # 흡혈 {"until","pct"}
-        self.undying_until = 0.0     # 체력이 1 밑으로 떨어지지 않음
-        self.pierce_until = 0.0      # 기본 공격이 뒤의 적까지 관통
-        self.q_hit_until = 0.0       # 외줄 걸기 적중 후 삼도 던지기가 즉발인 시간
-        self.bush_until = 0.0        # 부쉬 안이거나 막 나온 뒤 사거리 보너스가 유지되는 시간
-        self.anchor_id = None        # 설치한 줄 말뚝
-        self.rope = None             # 공중 외줄 위에 있을 때 {"x0","z0","x1","z1","len","s","until","ab","rank"}
-        self.bonus_armor = 0.0       # 메아리의 표식 비례 방어력
 
         self.dead = False
         self.respawn_at = 0.0
@@ -206,7 +180,7 @@ class Champion(Unit):
             "bonus_ad": item_stats.get("ad", 0),
             "ad": base_ad + item_stats.get("ad", 0),
             "ap": item_stats.get("ap", 0),
-            "armor": s["armor"] + s["armor_per_level"] * lv + item_stats.get("armor", 0) + self.bonus_armor,
+            "armor": s["armor"] + s["armor_per_level"] * lv + item_stats.get("armor", 0),
             "mr": s["mr"] + s["mr_per_level"] * lv + item_stats.get("mr", 0),
             "attack_speed": min(2.5, s["attack_speed"] * (1 + s["attack_speed_per_level"] * lv
                                                           + item_stats.get("attack_speed", 0) + buff_as)),
@@ -350,7 +324,7 @@ class GroundEffect:
 
 
 class Anchor(Unit):
-    """줄 말뚝: 적도 볼 수 있고, 기본 공격 3번이면 부서진다."""
+    """바닥에 놓여 적도 볼 수 있고 때려서 부술 수 있는 설치물."""
     kind = "anchor"
 
     def __init__(self, uid, team, owner, x, z, until):
@@ -373,11 +347,11 @@ class Cocoon(Anchor):
 
 
 class Zone:
-    """일정 시간 남아 있는 장판 (성역, 대자연의 정원, 사냥 덫, 대종 감옥)."""
+    """일정 시간 남아 있는 장판 (독 거미줄, 불길 등)."""
 
-    def __init__(self, zid, kind, team, owner, x, z, radius, until, style, hidden=False, data=None):
+    def __init__(self, zid, kind, team, owner, x, z, radius, until, style, data=None):
         self.id = zid
-        self.kind = kind               # aura / trap / cage
+        self.kind = kind               # aura
         self.team = team
         self.owner = owner
         self.x = x
@@ -386,7 +360,6 @@ class Zone:
         self.born = 0.0
         self.until = until
         self.style = style
-        self.hidden = hidden           # True 면 아군에게만 보인다 (덫)
         self.data = data or {}
 
 

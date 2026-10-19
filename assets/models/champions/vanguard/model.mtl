@@ -1,7 +1,0 @@
-newmtl tex_model_texture
-Ka 1.0 1.0 1.0
-Kd 1.0000 1.0000 1.0000
-Ks 0.0 0.0 0.0
-d 1.0
-illum 1
-map_Kd model_texture.png

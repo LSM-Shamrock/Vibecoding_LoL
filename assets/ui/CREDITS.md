@@ -13,34 +13,6 @@
 
 | 챔피언 | 키 | 스킬 | 아이콘 (작가) |
 |---|---|---|---|
-| 바르고 | Q | 범위 타격 | [groundbreaker](https://game-icons.net/1x1/lorc/groundbreaker.html) — Lorc |
-| 바르고 | W | 반격의 방어막 | [shield-reflect](https://game-icons.net/1x1/lorc/shield-reflect.html) — Lorc |
-| 바르고 | E | 밀치기 | [push](https://game-icons.net/1x1/delapouite/push.html) — Delapouite |
-| 바르고 | R | 강습 | [meteor-impact](https://game-icons.net/1x1/lorc/meteor-impact.html) — Lorc |
-| 카론 | Q | 흡혈 | [pretty-fangs](https://game-icons.net/1x1/lorc/pretty-fangs.html) — Lorc |
-| 카론 | W | 낫 휘두르기 | [scythe](https://game-icons.net/1x1/lorc/scythe.html) — Lorc |
-| 카론 | E | 망령 이동 | [spectre](https://game-icons.net/1x1/lorc/spectre.html) — Lorc |
-| 카론 | R | 영혼 속박 | [chained-heart](https://game-icons.net/1x1/lorc/chained-heart.html) — Lorc |
-| 무진 | Q | 타종 | [ringing-bell](https://game-icons.net/1x1/lorc/ringing-bell.html) — Lorc |
-| 무진 | W | 메아리 | [shield-echoes](https://game-icons.net/1x1/lorc/shield-echoes.html) — Lorc |
-| 무진 | E | 정적의 종 | [silence](https://game-icons.net/1x1/lorc/silence.html) — Lorc |
-| 무진 | R | 대종 낙하 | [bell-shield](https://game-icons.net/1x1/lorc/bell-shield.html) — Lorc |
-| 꼭두 | Q | 외줄 걸기 | [hook](https://game-icons.net/1x1/delapouite/hook.html) — Delapouite |
-| 꼭두 | W | 삼도 던지기 | [thrown-daggers](https://game-icons.net/1x1/lorc/thrown-daggers.html) — Lorc |
-| 꼭두 | E | 줄 말뚝 | [stake-hammer](https://game-icons.net/1x1/delapouite/stake-hammer.html) — Delapouite |
-| 꼭두 | R | 공중 외줄 | [tightrope](https://game-icons.net/1x1/delapouite/tightrope.html) — Delapouite |
-| 아린 | Q | 연속 사격 | [lightning-bow](https://game-icons.net/1x1/lorc/lightning-bow.html) — Lorc |
-| 아린 | W | 사냥 덫 | [wolf-trap](https://game-icons.net/1x1/lorc/wolf-trap.html) — Lorc |
-| 아린 | E | 구르기 | [jump-across](https://game-icons.net/1x1/delapouite/jump-across.html) — Delapouite |
-| 아린 | R | 관통 화살 | [fast-arrow](https://game-icons.net/1x1/lorc/fast-arrow.html) — Lorc |
-| 엘리아 | Q | 치유의 빛 | [healing](https://game-icons.net/1x1/delapouite/healing.html) — Delapouite |
-| 엘리아 | W | 성역 | [sun-radiations](https://game-icons.net/1x1/lorc/sun-radiations.html) — Lorc |
-| 엘리아 | E | 정화 | [bubbles](https://game-icons.net/1x1/lorc/bubbles.html) — Lorc |
-| 엘리아 | R | 불멸의 기도 | [angel-wings](https://game-icons.net/1x1/lorc/angel-wings.html) — Lorc |
-| 로웬 | Q | 가시 덩굴 | [vine-whip](https://game-icons.net/1x1/lorc/vine-whip.html) — Lorc |
-| 로웬 | W | 꽃잎 보호막 | [lotus](https://game-icons.net/1x1/lorc/lotus.html) — Lorc |
-| 로웬 | E | 바람의 축복 | [whirlwind](https://game-icons.net/1x1/lorc/whirlwind.html) — Lorc |
-| 로웬 | R | 대자연의 정원 | [circle-forest](https://game-icons.net/1x1/delapouite/circle-forest.html) — Delapouite |
 | 거미 여왕 | Q | 독침 뿌리기 | [divergence](https://game-icons.net/1x1/lorc/divergence.html) — Lorc |
 | 거미 여왕 | W | 거미줄 장판 | [spider-web](https://game-icons.net/1x1/lorc/spider-web.html) — Lorc |
 | 거미 여왕 | E | 새끼 거미 고치 | [big-egg](https://game-icons.net/1x1/sbed/big-egg.html) — sbed |

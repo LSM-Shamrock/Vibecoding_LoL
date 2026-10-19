@@ -1,6 +1,6 @@
 """챔피언 봇 AI. 플레이어와 같은 명령 함수(sim.cast, sim.cmd_move 등)를 사용한다.
 
-스킬은 type 별 규칙(plan / plan_support)으로 쓸 시점과 조준 지점을 정한다.
+스킬은 type 별 규칙(plan)으로 쓸 시점과 조준 지점을 정한다.
 챔피언 data 에 "bot_priority": ["R","E","W","Q"] 를 넣으면 스킬을 검토하는 순서를 바꿀 수 있다.
 
 - 부쉬: 쫓던 적이 부쉬로 숨으면 마지막으로 본 곳까지 따라 들어가 확인하고, 할 일이 없을 때는 가까운 부쉬에 숨어 기다리며,
@@ -14,8 +14,7 @@ from ..shared import data as gamedata
 from ..shared import mapdata
 from ..shared.constants import EXHAUST_RANGE, IGNITE_RANGE, MARK_RANGE
 
-SUPPORT_TYPES = ("ally_heal", "cleanse", "team_heal", "ally_shield", "ally_buff")
-POKE_TYPES = ("skillshot", "line_aoe", "cone", "volley")
+POKE_TYPES = ("volley",)
 
 
 class BotBrain:
@@ -281,107 +280,18 @@ class BotBrain:
                 best, bd = r, d
         return best
 
-    @staticmethod
-    def needs_cleanse(a, t):
-        return a.stunned(t) or t < a.root_until or a.silenced(t)
-
     # ------------------------------------------------------------------ 스킬 규칙
     def plan(self, sim, slot, target, enemies, allies, hp_ratio):
         """적 챔피언(target)을 상대로 slot 스킬을 쓸 때 조준 지점. 쓰지 않으면 None."""
         c = self.c
-        t = sim.time
         ab = self.ab(slot)
         typ = ab["type"]
-        ult = slot == "R"
         dist = c.dist_to(target)
         their = target.hp / max(1.0, target.max_hp)
         tx, tz = target.x, target.z
         me = (c.x, c.z)
         clustered = self.count_near(enemies, target, 3.4) >= 2
 
-        if typ == "skillshot":
-            rng = min(ab["range"], 13.0)
-            if ab.get("pierce") and ult:                    # 멀리서 체력이 낮은 적을 마무리
-                return self.aim(sim, target, ab["speed"]) if their < 0.4 else None
-            if ult and not (their < 0.55 or clustered):
-                return None
-            return self.aim(sim, target, ab["speed"]) if dist <= rng * 0.9 else None
-        if typ == "hook_dash":
-            in_bush = mapdata.bush_at(c.x, c.z) >= 0 or t < c.bush_until
-            rng = ab["bush_range"] if in_bush else ab["range"]
-            if (dist <= rng * 0.92 and dist > 2.0 and hp_ratio > 0.4
-                    and self.dash_ok(sim, target, tx, tz) and len(enemies) <= 2):
-                return self.aim(sim, target, ab["speed"])
-            return None
-        if typ == "knife_throw":
-            if t < c.q_hit_until or c.rope:
-                return (tx, tz) if dist <= ab.get("fast_range", 4.5) - 0.3 else None
-            return self.aim(sim, target, ab.get("speed", 11)) if 3.0 < dist <= ab.get("range", 8.0) - 1.0 else None
-        if typ == "self_aoe":
-            return me if dist <= ab["radius"] * 0.9 else None
-        if typ in ("counter_shield", "echo_guard"):
-            hit_recently = t - c.last_hit_at < 1.5
-            near = sum(1 for e in enemies if c.dist_to(e) <= 6.0)
-            return me if near and (hit_recently or near >= 2 or hp_ratio < 0.8) else None
-        if typ == "lifesteal_buff":
-            return me if dist <= 3.5 else None
-        if typ == "ghost_walk":
-            if their < 0.45 and 3.0 < dist < 9.0 and self.dash_ok(sim, target, tx, tz):
-                return (tx, tz)
-            return None
-        if typ == "knockback":
-            return (tx, tz) if dist <= ab["range"] else None
-        if typ == "teleport_strike":
-            if (dist >= 5.0 and (clustered or their < 0.35) and self.dash_ok(sim, target, tx, tz)
-                    and hp_ratio > 0.5):
-                return (tx, tz)
-            return None
-        if typ == "cone":
-            return (tx, tz) if dist <= ab["range"] * 0.95 else None
-        if typ == "silence_marked":
-            marked = [e for e in enemies if e.mark_of("resonance", t, c.id) and c.dist_to(e) <= ab["radius"]]
-            return me if marked and (len(marked) >= 2 or their < 0.6 or c.dist_to(marked[0]) <= 5.0) else None
-        if typ == "cage":
-            if dist <= ab["range"] and (their < 0.7 or clustered):
-                return self.aim(sim, target)
-            return None
-        if typ == "anchor":
-            if c.anchor_id in sim.anchors:
-                a = sim.anchors[c.anchor_id]
-                far = math.hypot(a.x - c.x, a.z - c.z) > 2.5
-                # 콤보를 넣은 뒤(칼을 던지고 났을 때)나 위험하면 말뚝으로 복귀
-                if far and (hp_ratio < 0.5 or a.until - t < 1.2 or (c.q_hit_until == 0 and t - c.last_hit_at < 1.0)):
-                    return me
-                return None
-            return me if (dist <= 8.5 and hp_ratio > 0.5 and their < 0.85) else None
-        if typ == "rope_walk":
-            if c.rope:
-                return None                                  # 줄 위 행동은 rope_tick 이 한다
-            if dist <= 8.0 and ((len(enemies) >= 2 and hp_ratio < 0.8) or hp_ratio < 0.5):
-                return (tx, tz)
-            return None
-        if typ == "trap":
-            if 4.0 <= dist <= ab["range"] + 1.0:
-                return (c.x + (tx - c.x) * 0.65, c.z + (tz - c.z) * 0.65)
-            return None
-        if typ == "self_buff":
-            return me if dist <= c.stats["attack_range"] + 1.5 else None
-        if typ == "dash":
-            if c.stats["attack_range"] > 3.0:               # 원거리: 붙은 적에게서 구르며 빠진다
-                if dist < 3.4 and not self.turret_threat(sim, c.x, c.z):
-                    d = dist or 1.0
-                    return (c.x - (tx - c.x) / d * 4.0, c.z - (tz - c.z) / d * 4.0)
-                return None
-            rng_atk = c.stats["attack_range"]
-            if their < 0.4 and rng_atk + 1 < dist < rng_atk + ab["range"] and self.dash_ok(sim, target, tx, tz):
-                return (tx, tz)
-            return None
-        if typ == "line_aoe":
-            return self.aim(sim, target, None) if dist <= ab["range"] * 0.9 else None
-        if typ == "ground_aoe":
-            if dist <= ab["range"] and (their < 0.55 or clustered):
-                return self.aim(sim, target)
-            return None
         if typ == "volley":
             return (tx, tz) if dist <= ab["range"] * 0.95 else None
         if typ == "cocoon":                                  # 고치: 적 근처에 깔아 새끼 거미가 달려들게
@@ -408,131 +318,21 @@ class BotBrain:
             if (2.2 < dist <= ab["range"] + 0.5 and hp_ratio > 0.35 and self.dash_ok(sim, target, tx, tz)):
                 return (tx, tz)
             return None
-        if typ == "zone" and (ab.get("root") or ab.get("damage_per_sec")):   # 공격형 장판 (대자연의 정원, 독 거미줄)
+        if typ == "zone":                                    # 독 거미줄
             if dist <= ab["range"] and (clustered or their < 0.5):
                 return (tx, tz)
             return None
         return None
 
-    def plan_support(self, sim, slot, enemies, allies):
-        """아군을 돕는 스킬: 조준 지점 또는 None."""
-        c = self.c
-        t = sim.time
-        ab = self.ab(slot)
-        typ = ab["type"]
-        rng = ab.get("range", 9.0)
-        hurt = [a for a in allies if a.hp / max(1.0, a.max_hp) < 0.7 and c.dist_to(a) <= rng]
-        under_fire = [a for a in allies if t - a.last_hit_at < 2.0 and c.dist_to(a) <= rng]
-        fighting = bool(enemies)
-
-        if typ == "ally_heal":
-            pool = hurt if hurt else [a for a in allies if a.hp < a.max_hp * 0.9 and c.dist_to(a) <= rng and fighting]
-            if not pool:
-                return None
-            a = min(pool, key=lambda a: a.hp / max(1.0, a.max_hp))
-            return (a.x, a.z)
-        if typ == "cleanse":
-            for a in allies:
-                if self.needs_cleanse(a, t) and c.dist_to(a) <= rng:
-                    return (a.x, a.z)
-            return None
-        if typ == "team_heal":
-            low = [a for a in allies if a.hp / max(1.0, a.max_hp) < 0.45 and c.dist_to(a) <= ab["radius"]]
-            if len(low) >= 2 or (low and fighting and c.hp / max(1.0, c.max_hp) < 0.4):
-                return (c.x, c.z)
-            return None
-        if typ == "ally_shield":
-            if not fighting:
-                return None
-            pool = [a for a in under_fire if a.hp / max(1.0, a.max_hp) < 0.9]
-            if not pool:
-                return None
-            a = min(pool, key=lambda a: a.hp / max(1.0, a.max_hp))
-            return (a.x, a.z)
-        if typ == "ally_buff":
-            if not fighting:
-                return None
-            carriers = [a for a in allies if a is not c and c.dist_to(a) <= rng
-                        and (a.attack_target is not None or a.windup)]
-            if carriers:
-                a = max(carriers, key=lambda a: a.stats["ad"])
-                return (a.x, a.z)
-            return (c.x, c.z) if c.attack_target is not None else None
-        if typ == "zone" and not ab.get("root"):             # 회복 장판 (성역)
-            if not fighting or not hurt:
-                return None
-            a = min(hurt, key=lambda a: a.hp / max(1.0, a.max_hp))
-            return (a.x, a.z)
-        return None
-
-    def support_cast(self, sim, allies, enemies):
-        c = self.c
-        for slot in ("R", "E", "W", "Q"):
-            typ = self.ab(slot)["type"]
-            if typ not in SUPPORT_TYPES and not (typ == "zone" and not self.ab(slot).get("root")):
-                continue
-            if not self.ready(sim, slot):
-                continue
-            pt = self.plan_support(sim, slot, enemies, allies)
-            if pt is not None and sim.cast(c, slot, pt[0], pt[1]):
-                return True
-        return False
-
     def try_skills(self, sim, target, enemies, allies, hp_ratio):
         c = self.c
         for slot in c.data.get("bot_priority", ["R", "E", "W", "Q"]):
-            typ = self.ab(slot)["type"]
-            if typ in SUPPORT_TYPES or (typ == "zone" and not self.ab(slot).get("root")):
-                continue
             if not self.ready(sim, slot):
                 continue
             pt = self.plan(sim, slot, target, enemies, allies, hp_ratio)
             if pt is not None and sim.cast(c, slot, pt[0], pt[1]):
                 return True
         return False
-
-    def escape(self, sim, close, fx, fz):
-        """위험할 때 쓰는 탈출·방어 스킬."""
-        c = self.c
-        t = sim.time
-        for slot in ("E", "Q", "W", "R"):
-            if not self.ready(sim, slot):
-                continue
-            ab = self.ab(slot)
-            typ = ab["type"]
-            if typ in ("dash", "ghost_walk"):
-                return sim.cast(c, slot, fx, fz)
-            if typ == "anchor" and c.anchor_id in sim.anchors:
-                return sim.cast(c, slot, c.x, c.z)
-            if typ == "rope_walk" and not c.rope:
-                return sim.cast(c, slot, fx, fz)
-            if typ == "knockback" and c.dist_to(close[0]) <= ab["range"]:
-                return sim.cast(c, slot, close[0].x, close[0].z)
-            if typ in ("counter_shield", "echo_guard"):
-                return sim.cast(c, slot, c.x, c.z)
-            if typ == "ally_shield":
-                return sim.cast(c, slot, c.x, c.z)
-            if typ == "self_aoe" and c.dist_to(close[0]) <= ab["radius"]:
-                return sim.cast(c, slot, c.x, c.z)
-        _ = t
-        return False
-
-    def rope_tick(self, sim, enemies):
-        """공중 외줄 위: 가까운 적에게 칼을 내리꽂고, 시간이 다 되어 가면 내려온다."""
-        c = self.c
-        r = c.rope
-        t = sim.time
-        ex = [e for e in enemies if math.hypot(e.x - c.x, e.z - c.z) <= 5.5]
-        if ex:
-            e = min(ex, key=lambda e: c.dist_to(e))
-            if self.ready(sim, "W") and self.ab("W")["type"] == "knife_throw" and c.dist_to(e) <= 4.2:
-                sim.cast(c, "W", e.x, e.z)
-        if enemies:
-            e = min(enemies, key=lambda e: c.dist_to(e))
-            sim.cmd_move(c, e.x, e.z)
-        landing = r["until"] - t < 0.4 or (not enemies and t > r["until"] - 2.0)
-        if landing:
-            sim.cast(c, "R", c.x, c.z)
 
     # ------------------------------------------------------------------
     def decide(self, sim):
@@ -553,10 +353,6 @@ class BotBrain:
         if chasing is not None and not self.dive_ok(sim, chasing):
             c.clear_orders()
 
-        if c.rope:
-            self.rope_tick(sim, enemies)
-            return
-
         # ---- 귀환 중: 안전하면 그대로 두고, 위험해지면 귀환을 멈추고 아래 판단(후퇴 등)으로
         if c.recall_at is not None:
             if not self.in_danger(sim):
@@ -565,13 +361,6 @@ class BotBrain:
         # 우물에서는 거의 다 찰 때까지 회복
         if sim.in_fountain(c) and (hp_ratio < 0.9 or c.mana < c.max_mana * 0.6):
             return
-
-        # ---- 말뚝이 남아 있고 주변에 적이 없으면 복귀 (쿨타임을 돌리기 위해)
-        if c.anchor_id in sim.anchors and not enemies:
-            for slot in ("E", "Q", "W"):
-                if self.ab(slot)["type"] == "anchor" and self.ready(sim, slot):
-                    sim.cast(c, slot, c.x, c.z)
-                    break
 
         # ---- 위험: 후퇴
         if hp_ratio < 0.28:
@@ -585,10 +374,6 @@ class BotBrain:
                 sim.cmd_move(c, relic.x, relic.z)
                 return
             close = [e for e in enemies if c.dist_to(e) < 5]
-            if close and self.support_cast(sim, allies, enemies):
-                return
-            if close and self.escape(sim, close, fx, fz):
-                return
             if close and hp_ratio < 0.15 and t >= c.ready_at["D"] and c.spells[0] == "flash":
                 sim.flash(c, fx, fz)
                 return
@@ -601,10 +386,6 @@ class BotBrain:
                             sim.cmd_move(c, bx, bz)
                             return
             sim.cmd_move(c, fx + direction * 4, fz)
-            return
-
-        # ---- 아군 지원 (치유·정화·보호막·버프)
-        if self.support_cast(sim, allies, enemies):
             return
 
         if hp_ratio < 0.65:
@@ -717,8 +498,6 @@ class BotBrain:
             if ab["type"] not in POKE_TYPES or not self.ready(sim, slot):
                 continue
             rng = ab.get("range", 8)
-            if ab["type"] == "line_aoe" and dist > rng * 0.9:
-                continue
             if dist <= rng * 0.9:
                 sim.cast(c, slot, *self.aim(sim, target, ab.get("speed")))
                 return

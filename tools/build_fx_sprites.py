@@ -118,27 +118,6 @@ def ring_soft():
                       + np.exp(-((r - 0.93) / 0.035) ** 2))
 
 
-def rune():
-    im = canvas()
-    d = ImageDraw.Draw(im)
-    c = (0.5, 0.5)
-    for rad, w in ((0.47, 0.012), (0.42, 0.006), (0.30, 0.008)):
-        d.ellipse([*P(c[0] - rad, c[1] - rad), *P(c[0] + rad, c[1] + rad)], outline=W, width=int(w * N * SS))
-    for k in range(24):                               # 바깥 눈금
-        a = k / 24 * math.tau
-        r0, r1 = (0.42, 0.47) if k % 2 else (0.40, 0.47)
-        d.line([P(c[0] + math.cos(a) * r0, c[1] + math.sin(a) * r0), P(c[0] + math.cos(a) * r1, c[1] + math.sin(a) * r1)],
-               fill=W, width=int(0.008 * N * SS))
-    for rot in (0, math.pi / 3):                      # 육망성
-        pts = [P(c[0] + math.cos(rot - math.pi / 2 + k * math.tau / 3) * 0.30,
-                 c[1] + math.sin(rot - math.pi / 2 + k * math.tau / 3) * 0.30) for k in range(3)]
-        d.polygon(pts, outline=W, width=int(0.008 * N * SS))
-    for k in range(6):                                # 끝 점
-        a = k / 6 * math.tau
-        d.ellipse([*P(c[0] + math.cos(a) * 0.30 - 0.02, c[1] + math.sin(a) * 0.30 - 0.02),
-                   *P(c[0] + math.cos(a) * 0.30 + 0.02, c[1] + math.sin(a) * 0.30 + 0.02)], fill=W)
-    d.ellipse([*P(0.47, 0.47), *P(0.53, 0.53)], fill=W)
-    return finish(im, 0.5)
 
 
 def crack():
@@ -256,21 +235,6 @@ def feather():
     return finish(im, 0.6)
 
 
-def leaf():
-    left = _bezier((0.5, 0.96), (0.08, 0.5), (0.5, 0.04))
-    right = _bezier((0.5, 0.04), (0.92, 0.5), (0.5, 0.96))
-    im = canvas()
-    d = ImageDraw.Draw(im)
-    d.polygon([P(*p) for p in left + right], fill=W)
-    cut = Image.new("L", im.size, 0)
-    cd = ImageDraw.Draw(cut)
-    cd.line([P(0.5, 0.12), P(0.5, 0.97)], fill=W, width=int(0.014 * N * SS))
-    for k in range(5):
-        yy = 0.28 + k * 0.13
-        cd.line([P(0.5, yy + 0.08), P(0.5 - 0.18, yy - 0.02)], fill=W, width=int(0.008 * N * SS))
-        cd.line([P(0.5, yy + 0.08), P(0.5 + 0.18, yy - 0.02)], fill=W, width=int(0.008 * N * SS))
-    im = ImageChops.subtract(im, cut.point(lambda v: int(v * 0.5)))
-    return finish(im, 0.6)
 
 
 def petal():
@@ -279,13 +243,6 @@ def petal():
     return _poly_sprite(left + right, 0.8)
 
 
-def note():
-    im = canvas()
-    d = ImageDraw.Draw(im)
-    d.ellipse([*P(0.22, 0.62), *P(0.50, 0.82)], fill=W)
-    d.line([P(0.49, 0.72), P(0.49, 0.16)], fill=W, width=int(0.045 * N * SS))
-    d.polygon([P(0.47, 0.16), P(0.80, 0.30), P(0.78, 0.44), P(0.47, 0.30)], fill=W)
-    return finish(im, 0.7)
 
 
 def flame():
@@ -315,9 +272,6 @@ def streak():
     return from_array(np.maximum(a, head))
 
 
-def thorn():
-    pts = _bezier((0.36, 0.97), (0.46, 0.45), (0.58, 0.04), 20) + _bezier((0.58, 0.04), (0.60, 0.5), (0.64, 0.97), 20)
-    return _poly_sprite(pts, 0.7)
 
 
 def swirl():
@@ -362,51 +316,12 @@ def hex_shield():
     return from_array(a * (r < 1.0))
 
 
-def wings():
-    im = canvas()
-    d = ImageDraw.Draw(im)
-    for sgn in (-1, 1):
-        for k in range(7):
-            t = k / 6
-            base = (0.5 + sgn * 0.03, 0.62 - t * 0.04)
-            tip = (0.5 + sgn * (0.46 - 0.05 * t), 0.14 + t * 0.5)
-            mid = (0.5 + sgn * (0.30), (base[1] + tip[1]) / 2 - 0.12 + t * 0.10)
-            pts = _bezier(base, mid, tip) + _bezier(tip, (mid[0] - sgn * 0.0, mid[1] + 0.07), (base[0], base[1] + 0.10))
-            d.polygon([P(*p) for p in pts], fill=W)
-    return finish(im, 0.9)
 
 
-def chain():
-    im = canvas()
-    d = ImageDraw.Draw(im)
-    for k, (cy, tall) in enumerate(((0.22, True), (0.50, False), (0.78, True))):
-        if tall:
-            d.rounded_rectangle([*P(0.36, cy - 0.17), *P(0.64, cy + 0.17)], radius=int(0.13 * N * SS), outline=W,
-                                width=int(0.06 * N * SS))
-        else:
-            d.rounded_rectangle([*P(0.43, cy - 0.17), *P(0.57, cy + 0.17)], radius=int(0.06 * N * SS), fill=W)
-    return finish(im, 0.7)
 
 
-def bell():
-    im = canvas()
-    d = ImageDraw.Draw(im)
-    pts = _bezier((0.42, 0.14), (0.44, 0.05), (0.5, 0.05)) + _bezier((0.5, 0.05), (0.56, 0.05), (0.58, 0.14))
-    body = [(0.42, 0.14), (0.58, 0.14), (0.62, 0.40), (0.72, 0.68), (0.86, 0.78), (0.86, 0.84), (0.14, 0.84), (0.14, 0.78),
-            (0.28, 0.68), (0.38, 0.40)]
-    d.polygon([P(*p) for p in body], fill=W)
-    d.ellipse([*P(0.45, 0.04), *P(0.55, 0.14)], fill=W)
-    d.ellipse([*P(0.42, 0.84), *P(0.58, 0.96)], fill=W)
-    return finish(im, 0.7)
 
 
-def chevron():
-    im = canvas()
-    d = ImageDraw.Draw(im)
-    for oy in (0.0, 0.28):
-        d.polygon([P(0.5, 0.10 + oy), P(0.92, 0.46 + oy), P(0.78, 0.56 + oy), P(0.5, 0.32 + oy), P(0.22, 0.56 + oy),
-                   P(0.08, 0.46 + oy)], fill=W)
-    return finish(im, 0.7)
 
 
 def beam():
@@ -418,11 +333,6 @@ def beam():
     return from_array(a)
 
 
-def bar_line():
-    """가로로 길게 이어지는 줄 (밧줄 / 덩굴): 위 아래로 가는 선."""
-    x, y = grid()
-    dx = np.abs(x - 0.5) * 2
-    return from_array(np.exp(-(dx / 0.16) ** 2) * (0.75 + 0.25 * np.sin(y * 70)))
 
 
 def claw():
@@ -437,17 +347,6 @@ def claw():
     return finish(im, 0.8)
 
 
-def knife_fan():
-    """부채꼴로 흩어지는 칼날 선."""
-    im = canvas()
-    d = ImageDraw.Draw(im)
-    for k in range(5):
-        a = math.radians(-40 + k * 20)
-        p0 = (0.5, 0.95)
-        p1 = (0.5 + math.sin(a) * 0.86, 0.95 - math.cos(a) * 0.86)
-        d.line([P(*p0), P(*p1)], fill=W, width=int(0.016 * N * SS))
-        d.ellipse([*P(p1[0] - 0.025, p1[1] - 0.025), *P(p1[0] + 0.025, p1[1] + 0.025)], fill=W)
-    return finish(im, 1.0)
 
 
 def ember():
@@ -537,11 +436,11 @@ def magma_cracks():
 
 SPRITES = {
     "magma_cracks": magma_cracks,
-    "web": web, "venom_disc": venom_disc, "venom_bubbles": venom_bubbles, "venom_rim": venom_rim, "glow": glow, "spark": spark, "arc": arc, "slash": slash, "ring": ring, "ring_soft": ring_soft, "rune": rune,
-    "crack": crack, "dust": dust, "wave": wave, "drop": drop, "cross": cross, "feather": feather, "leaf": leaf,
-    "petal": petal, "note": note, "flame": flame, "shard": shard, "streak": streak, "thorn": thorn, "swirl": swirl,
-    "hex": hex_shield, "wings": wings, "chain": chain, "bell": bell, "chevron": chevron, "beam": beam,
-    "rope": bar_line, "claw": claw, "fan": knife_fan, "ember": ember,
+    "web": web, "venom_disc": venom_disc, "venom_bubbles": venom_bubbles, "venom_rim": venom_rim, "glow": glow, "spark": spark, "arc": arc, "slash": slash, "ring": ring, "ring_soft": ring_soft,
+    "crack": crack, "dust": dust, "wave": wave, "drop": drop, "cross": cross, "feather": feather,
+    "petal": petal, "flame": flame, "shard": shard, "streak": streak, "swirl": swirl,
+    "hex": hex_shield, "beam": beam,
+    "claw": claw, "ember": ember,
 }
 
 

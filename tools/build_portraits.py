@@ -21,8 +21,7 @@ from game.shared import data as gamedata
 OUT = os.path.join(ROOT, "assets", "ui", "portraits")
 SIZE = 128
 # 챔피언별 구도 (카메라가 보는 높이, 거리, 좌우 회전). 키가 크거나 작은 모델은 여기서 맞춘다.
-FRAMING = {"druid": {"dist": 3.15, "ty": 1.36},
-           "spider": {"ty": 0.68, "tz": 0.3, "dist": 2.3, "pitch": 14},      # 절차적 리그(거미): 얼굴이 카메라를 보게
+FRAMING = {"spider": {"ty": 0.68, "tz": 0.3, "dist": 2.3, "pitch": 14},      # 절차적 리그(거미): 얼굴이 카메라를 보게
            "serpent": {"ty": 1.85, "dist": 4.2, "pitch": 8, "yaw": 25},      # 절차적 리그(이무기): ㄴ자로 세운 몸과 머리를 비스듬히
            "dragon": {"ty": 1.9, "tz": 2.5, "tx": 0.45, "dist": 2.2, "pitch": 4, "yaw": 18}}   # 절차적 리그(용): 앞으로 내민 머리와 가슴
 DEFAULT = {"ty": 1.3, "dist": 2.75, "rot": 0.0, "tx": 0.0, "tz": 0.0, "pitch": 4, "yaw": 0.0}
@@ -34,31 +33,26 @@ def main():
     r, ctx = app.renderer, app.ctx
     cam = r.camera
     only = sys.argv[1:]
-    for cid, data in gamedata.all_champions().items():
+    for cid, data in gamedata.champions().items():
         if only and cid not in only:
             continue
         f = dict(DEFAULT, **FRAMING.get(cid, {}))
         col = tuple(c / 255 for c in data.get("color", (160, 170, 190)))
         mesh = app.models.champion(cid)
         ca = app.models.new_champ_anim(cid)
-        if ca and ca.is_rig:                        # 절차적 리그: 원점에서 카메라(+Z)를 보게 두고 잠깐 돌려 자세를 잡는다
+        if ca:                                      # 절차적 리그: 원점에서 카메라(+Z)를 보게 두고 잠깐 돌려 자세를 잡는다
             class Ent:
                 x, z, f = 0.0, 0.0, math.pi / 2
             for _ in range(10):
                 ca.update(1 / 30, {"st": (), "a": 0}, Ent)
-        elif ca:
-            try:
-                ca.update(0.0)
-            except Exception:  # noqa: BLE001
-                pass
         cam.tx, cam.ty, cam.tz = f["tx"], f["ty"], f["tz"]
         cam.distance, cam.pitch, cam.yaw = f["dist"], math.radians(f["pitch"]), math.radians(f["yaw"])
         bg = tuple(0.12 + 0.2 * c for c in col)
         r.begin_3d(cam, clear=bg, sky=False)
-        if ca and ca.is_rig:
+        if ca:
             ca.draw(r)
         else:
-            r.draw(mesh, model_matrix(0, 0, 0, rot_y=f["rot"]), bones=ca.bones() if ca else None)
+            r.draw(mesh, model_matrix(0, 0, 0, rot_y=f["rot"]))
         w, h = r.window_size
         raw = ctx.screen.read(viewport=(0, 0, w, h), components=3, alignment=1)
         img = Image.frombytes("RGB", (w, h), raw).transpose(Image.FLIP_TOP_BOTTOM)

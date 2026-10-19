@@ -33,7 +33,7 @@ from ..gl import Mesh, facing_to_rot, model_matrix
 from ..procedural import build_bush
 from ..rigs import CHAMP_SCALE
 from ..rigs.spider import SC as SC_RIG, baby_period
-from ..vfx import SUPPORT_FX, SUPPORT_SPELLS, SUPPORT_ZONES, Vfx, fx_color
+from ..vfx import SUPPORT_FX, SUPPORT_SPELLS, Vfx, fx_color
 
 MINION_KEYS = {0: "minion_melee", 1: "minion_caster", 2: "minion_cannon", 3: "minion_super", 4: "minion_spiderling"}
 BABY_PERIOD = baby_period()          # 새끼 거미 걸음 한 주기(초)
@@ -43,27 +43,20 @@ BABY_ATTACK_TILT = -0.55         # 새끼 거미가 공격할 때 앞을 드는 
 MINION_RADIUS = {0: 0.45, 1: 0.4, 2: 0.6, 3: 0.75, 4: 0.34}
 MINION_HEIGHT = {0: 1.2, 1: 1.25, 2: 1.1, 3: 2.0, 4: 0.7}
 PROJ_SPEED = {"arrow": 22, "snowball": 25, "turret_shot": 16, "turret_shot_2": 16, "turret_shot_3": 16, "minion_bolt": 14, "cannon_ball": 14,
-              "knife": 11, "knife_fast": 40, "hook": 30, "chain": 22, "giant_arrow": 45,
-              "light_bolt": 20, "leaf_bolt": 20, "web_shot": 20, "baby_shot": 20, "fire_bolt": 18, "tornado": 9}
+              "web_shot": 20, "baby_shot": 20, "fire_bolt": 18, "tornado": 9}
 # 투사체별 (높이, 발광색)
 PROJ_LOOK = {"turret_shot": (3.2, (0.3, 0.3, 0.3)), "turret_shot_2": (3.2, (0.5, 0.25, 0.1)), "turret_shot_3": (3.2, (0.7, 0.15, 0.08)), "minion_bolt": (0.8, None), "cannon_ball": (0.8, None),
-             "snowball": (1.1, (0.3, 0.3, 0.3)), "knife": (1.0, None), "knife_fast": (1.0, (0.15, 0.15, 0.2)),
-             "hook": (1.0, None), "chain": (1.0, (0.2, 0.15, 0.3)), "giant_arrow": (1.1, (0.3, 0.25, 0.1)),
-             "light_bolt": (1.25, (0.4, 0.35, 0.15)), "leaf_bolt": (1.2, (0.05, 0.2, 0.05)), "web_shot": (1.0, (0.2, 0.2, 0.15)), "baby_shot": (0.8, (0.2, 0.2, 0.15)),
+             "snowball": (1.1, (0.3, 0.3, 0.3)), "web_shot": (1.0, (0.2, 0.2, 0.15)), "baby_shot": (0.8, (0.2, 0.2, 0.15)),
              "fire_bolt": (1.9, (0.9, 0.4, 0.08)), "tornado": (0.0, None)}
 RING_THIN = 0.04            # models.py 의 ring_thin 두께 비율 (바깥 반지름의 몇 %가 선 두께인가)
 # 투사체 크기 배율 (잘 보이도록 모델보다 키워서 그린다)
 PROJ_SCALE = {"arrow": 1.4, "snowball": 1.35, "turret_shot": 1.0, "turret_shot_2": 1.0, "turret_shot_3": 1.0, "minion_bolt": 1.8, "cannon_ball": 1.5,
-              "knife": 1.35, "knife_fast": 1.4, "hook": 1.3, "chain": 1.3, "giant_arrow": 1.25,
-              "light_bolt": 1.4, "leaf_bolt": 1.4, "web_shot": 1.3, "baby_shot": 1.0, "fire_bolt": 1.0, "tornado": 1.0}
+              "web_shot": 1.3, "baby_shot": 1.0, "fire_bolt": 1.0, "tornado": 1.0}
 # 챔피언 머리 위/아래에 붙는 상태 표시 (이름, 색)
 STATUS_BADGES = [
     ("silence", "침묵", (150, 90, 220)), ("root", "속박", (160, 120, 60)), ("air", "공중", (120, 190, 255)),
-    ("caged", "감금", (200, 140, 50)), ("marked", "울림", (235, 190, 80)), ("undying", "불사", (255, 215, 90)),
     ("exhaust", "탈진", (190, 140, 230)), ("ignite", "점화", (255, 130, 80)),
-    ("immune", "면역", (230, 235, 245)), ("counter", "반격", (255, 180, 90)), ("echo", "메아리", (210, 150, 80)),
-    ("ghost", "유령", (150, 230, 200)), ("rope", "외줄", (220, 190, 120)), ("vamp", "흡혈", (230, 70, 100)),
-    ("pierce", "관통", (130, 220, 150)),
+    ("immune", "면역", (230, 235, 245)), ("ghost", "유령", (150, 230, 200)),
 ]
 STAT_LABELS = [("ad", "공격력", 1), ("ap", "주문력", 1), ("hp", "체력", 1), ("mana", "마나", 1),
                ("armor", "방어력", 1), ("mr", "마법 저항력", 1), ("attack_speed", "공격 속도 %", 100),
@@ -124,36 +117,19 @@ def _seg_dist(px, py, a, b):
 # 스킬 상세 설명 (Shift): (데이터 키, 이름, 표시 형식). 값이 리스트면 스킬 레벨별 값, 아니면 고정 값으로 보여준다.
 RANK_STATS = [("cooldown", "재사용 대기시간", "{:g}초"), ("mana", "마나 소모", "{:g}"), ("damage", "피해량", "{:g}"), ("damage_per_sec", "초당 피해량", "{:g}"),
               ("cone_damage", "부채꼴 피해량", "{:g}"), ("path_damage", "지나는 길 피해량", "{:g}"),
-              ("heal", "회복량", "{:g}"), ("heal_per_sec", "초당 회복량", "{:g}"), ("shield", "보호막", "{:g}"),
-              ("burst_damage", "보호막 파괴 시 피해", "{:g}"), ("attack_speed_pct", "공격 속도", "+{:.0%}"),
-              ("move_speed_pct", "이동 속도", "+{:.0%}"), ("pct", "생명력 흡수", "{:.0%}"),
-              ("empower_magic", "강화 공격 추가 피해", "{:g}"), ("empower_damage", "강화 공격 추가 피해", "{:g}"),
-              ("armor_per_mark", "표식당 방어력", "+{:g}"), ("airborne", "공중에 띄움", "{:g}초"),
-              ("wall_stun", "벽 충돌 기절", "{:g}초"), ("duration", "지속 시간", "{:g}초"),
+              ("airborne", "공중에 띄움", "{:g}초"), ("wall_stun", "벽 충돌 기절", "{:g}초"), ("duration", "지속 시간", "{:g}초"),
               ("baby_ad", "새끼 거미 평타 피해", "{:g}"), ("baby_hp", "새끼 거미 체력", "{:g}"), ("cocoon_hp", "고치 체력", "{:g}")]
 FLAT_STATS = [("ad_ratio", "공격력 계수", "{:.0%}"), ("damage_per_sec_ad", "초당 피해 공격력 계수", "{:.0%}"),
               ("cone_damage_ad", "부채꼴 피해 공격력 계수", "{:.0%}"), ("path_damage_ad", "지나는 길 피해 공격력 계수", "{:.0%}"), ("bonus_ad_ratio", "추가 공격력 계수", "{:.0%}"),
-              ("ap_ratio", "주문력 계수", "{:.0%}"), ("baby_ad_ratio", "새끼 거미 공격력 계수", "{:.0%}"), ("empower_ap_ratio", "강화 공격 주문력 계수", "{:.0%}"),
-              ("empower_damage_ad", "강화 공격 공격력 계수", "{:.0%}"), ("heal_ap", "회복 주문력 계수", "{:.0%}"),
-              ("heal_per_sec_ap", "초당 회복 주문력 계수", "{:.0%}"), ("shield_ap", "보호막 주문력 계수", "{:.0%}"),
-              ("burst_damage_ap", "파괴 피해 주문력 계수", "{:.0%}"),
-              ("range", "사거리", lambda v: f"{v * 100:g}"), ("bush_range", "부쉬 안 사거리", lambda v: f"{v * 100:g}"),
-              ("length", "줄 길이", lambda v: f"{v * 100:g}"), ("radius", "범위 반경", lambda v: f"{v * 100:g}"),
-              ("land_radius", "착지 범위", lambda v: f"{v * 100:g}"), ("burst_radius", "파괴 피해 범위", lambda v: f"{v * 100:g}"),
-              ("trigger_radius", "발동 범위", lambda v: f"{v * 100:g}"), ("angle", "각도", "{:g}°"),
-              ("ratio", "받은 피해의 보호막 전환", "{:.0%}"), ("shield_life", "보호막 유지", "{:g}초"),
-              ("defer_pct", "지연 피해 비율", "{:.0%}"), ("defer_time", "지연 피해 시간", "{:g}초"),
-              ("knock_distance", "밀어내는 거리", lambda v: f"{v * 100:g}"), ("max_targets", "최대 대상 수", "{:g}명"),
-              ("count", "투척 수", "{:g}자루"), ("max_traps", "최대 설치 수", "{:g}개"),
-              ("lifetime", "유지 시간", "{:g}초"), ("reveal", "시야 노출", "{:g}초"),
+              ("ap_ratio", "주문력 계수", "{:.0%}"), ("baby_ad_ratio", "새끼 거미 공격력 계수", "{:.0%}"),
+              ("range", "사거리", lambda v: f"{v * 100:g}"), ("radius", "범위 반경", lambda v: f"{v * 100:g}"), ("angle", "각도", "{:g}°"),
+              ("knock_distance", "밀어내는 거리", lambda v: f"{v * 100:g}"), ("count", "투척 수", "{:g}자루"),
               ("slow", "둔화", "{:.0%}"), ("slow_duration", "둔화 시간", "{:g}초"), ("stun", "기절", "{:g}초"),
-              ("root", "속박", "{:g}초"), ("silence", "침묵", "{:g}초"), ("immune", "CC 면역", "{:g}초"),
-              ("undying", "불사 시간", "{:g}초"), ("mark_duration", "표식 지속", "{:g}초"),
-              ("empower_duration", "강화 지속 시간", "{:g}초"), ("delay", "발동 지연", "{:g}초")]
+              ("root", "속박", "{:g}초"), ("silence", "침묵", "{:g}초"), ("delay", "발동 지연", "{:g}초")]
 DAMAGE_TYPES = {"physical": "물리", "magic": "마법", "true": "고정"}
 DAMAGE_TAGS = {"physical": "AD", "magic": "AP", "true": "고정"}
 # 피해량 행: 데이터 키 -> 피해 유형을 정하는 방법 (없으면 스킬의 damage_type)
-DAMAGE_KEYS = {"damage", "damage_per_sec", "cone_damage", "path_damage", "burst_damage", "empower_magic", "empower_damage", "baby_ad"}
+DAMAGE_KEYS = {"damage", "damage_per_sec", "cone_damage", "path_damage", "baby_ad"}
 
 
 TAG_COLORS = {"AD": (240, 150, 70), "AP": (175, 130, 255), "고정": (235, 235, 235)}
@@ -177,11 +153,7 @@ def detail_value_x(details, size=13, min_x=140):
 
 def damage_tag(ab, key):
     """피해량 행에 붙일 AD / AP 표시."""
-    if key == "empower_magic":
-        dtype = "magic"
-    elif key == "empower_damage":
-        dtype = ab.get("empower_damage_type", "physical")
-    elif key == "baby_ad":
+    if key == "baby_ad":
         dtype = "physical"
     else:
         dtype = ab.get("damage_type", "physical")
@@ -383,7 +355,7 @@ class GameScene(Scene):
         self.ground_effects = []
         self.ef_total = {}          # 장판 id -> 처음 받은 남은 시간 (예고 연출 진행도 계산용)
         self.zones = []             # 성역·정원·덫·대종 감옥 등 (row, 받은 시각)
-        self.anchors = []           # 줄 말뚝 (row, 받은 시각)
+        self.anchors = []           # 거미 고치 (row, 받은 시각)
         self.relics = []
         self.fx = []
         self.cast_msg = None               # (안내 문구, 만료 시각)
@@ -524,7 +496,7 @@ class GameScene(Scene):
             if st["tm"] == self.my_team and self.struct_state[sid][2]:
                 obs.append((st["x"], st["z"], SIGHT[st["k"]]))
         for row, _ in self.anchors:                      # 내 팀 거미 고치: 주변만 좁게
-            if row[1] == self.my_team and len(row) > 6 and row[6] == 1:
+            if row[1] == self.my_team:
                 obs.append((row[2], row[3], SIGHT["cocoon"]))
         # 칸마다 "얼마나 보이는가"(0~1)를 거리에 따라 부드럽게 계산한다 (가장자리를 계단 없이 번지게)
         vis = np.zeros(self.vis_x.shape, dtype=np.float32)
@@ -564,7 +536,7 @@ class GameScene(Scene):
         pts = [(e.x, e.z) for cid, e in self.champs.items()
                if self.champ_info[cid]["tm"] == self.my_team and e.d and not e.d["dead"]]
         pts += [(e.x, e.z) for e in self.minions.values() if e.d[2] == self.my_team]
-        pts += [(row[2], row[3]) for row, _ in self.anchors if row[1] == self.my_team and len(row) > 6 and row[6] == 1]
+        pts += [(row[2], row[3]) for row, _ in self.anchors if row[1] == self.my_team]
         return {b for b in (mapdata.bush_at(x, z) for x, z in pts) if b >= 0}
 
     def view_team(self, team):
@@ -766,7 +738,7 @@ class GameScene(Scene):
         self.fx_sounds(kind, ev)
         if kind == "leap":                                      # 점프 덮치기: 몸을 공중 자세로
             ch = self.champs.get(ev.get("d"))
-            if ch and ch.ca and ch.ca.is_rig:
+            if ch and ch.ca:
                 ch.ca.leap(ev.get("dur", 0.5), ev.get("delay", 0.0))
         if kind == "spit" and ev.get("style") != "fire":         # 독 뱉기: 리그가 있으면 실제 입 위치에서 나가게
             ch = self.champs.get(ev.get("d"))
@@ -793,8 +765,6 @@ class GameScene(Scene):
         style = ev.get("style")
         if kind == "spell":
             support = style in SUPPORT_SPELLS
-        elif kind == "zone_start":
-            support = style in SUPPORT_ZONES
         else:
             support = kind in SUPPORT_FX
         ally = None if tm is None else tm == self.my_team
@@ -838,82 +808,15 @@ class GameScene(Scene):
         elif kind == "plate":
             self.add_fx("burst", x, z, 0.6, radius=2.2, color=(1.0, 0.82, 0.35))
         elif kind == "slam":
-            style = ev.get("style", "slam")
-            col = {"slam": (1.0, 0.75, 0.4), "sweep": (0.75, 0.45, 1.0), "land": (1.0, 0.85, 0.45)}.get(style, (1, 0.8, 0.5))
+            col = (1, 0.8, 0.5)
             self.add_fx("burst", x, z, 0.5, radius=rr, color=col)
             self.add_fx("shards", x, z, 0.7, radius=rr, color=col)
-            if style == "land":
-                self.add_fx("pillar", x, z, 0.5, radius=rr * 0.45, color=col, h=8.0)
-        elif kind == "buff":
-            col = {"counter": (1.0, 0.8, 0.4), "vamp": (1.0, 0.3, 0.4), "ghost": (0.7, 0.5, 1.0),
-                   "echo": (0.85, 0.6, 0.3)}.get(ev.get("style", "buff"), (0.5, 0.85, 1.0))
-            self.add_fx("ring_up", x, z, 0.7, radius=1.3, color=col)
-        elif kind == "knock":
-            self.add_fx("line", x, z, 0.35, color=(1.0, 0.85, 0.5), x2=ev["x2"], z2=ev["z2"], w=ev.get("w", 1.5))
         elif kind == "wallhit":
             self.add_fx("burst", x, z, 0.4, radius=1.3, color=(1.0, 0.7, 0.3))
-        elif kind == "teleport":
-            self.add_fx("poof", x, z, 0.5, color=(1.0, 0.9, 0.5))
-            self.add_fx("pillar", ev["x2"], ev["z2"], 0.6, radius=0.6, color=(1.0, 0.9, 0.5), h=9.0)
-        elif kind == "cone":
-            self.add_fx("sector", x, z, 0.45, radius=rr, color=(1.0, 0.75, 0.35), a=ev["a"], w=ev.get("w", 60))
-        elif kind == "silence_ring":
-            self.add_fx("burst", x, z, 0.6, radius=rr, color=(0.75, 0.5, 1.0))
-            self.add_fx("ring_up", x, z, 0.8, radius=rr * 0.6, color=(0.85, 0.65, 1.0))
-        elif kind == "bell_drop":
-            self.add_fx("burst", x, z, 0.5, radius=rr, color=(1.0, 0.75, 0.3))
-            self.add_fx("shards", x, z, 0.7, radius=rr, color=(1.0, 0.8, 0.4))
-        elif kind == "cage_end":
-            self.add_fx("bell_lift", x, z, 0.7, radius=rr)
-            self.add_fx("burst", x, z, 0.5, radius=rr, color=(1.0, 0.75, 0.3))
-        elif kind == "knife_burst":
-            self.add_fx("sector", x, z, 0.3, radius=4.5, color=(0.9, 0.95, 1.0), a=ev["a"], w=44)
-        elif kind == "rope_pull":
-            self.add_fx("line", x, z, 0.3, color=(0.85, 0.7, 0.4), x2=ev["x2"], z2=ev["z2"], w=0.25)
-        elif kind == "rope_up":
-            self.add_fx("ring_up", x, z, 0.6, radius=1.0, color=(0.85, 0.7, 0.4))
-            self.add_fx("ring_up", ev["x2"], ev["z2"], 0.6, radius=1.0, color=(0.85, 0.7, 0.4))
-        elif kind == "anchor_set":
-            self.add_fx("ring_up", x, z, 0.6, radius=0.9, color=(0.3, 0.85, 0.9))
-        elif kind == "anchor_break":
-            self.add_fx("burst", x, z, 0.4, radius=1.2, color=(0.8, 0.6, 0.3))
-            self.add_fx("poof", x, z, 0.4, color=(0.8, 0.65, 0.4))
-        elif kind == "trap_set":
-            self.add_fx("ring_up", x, z, 0.5, radius=0.8, color=(0.85, 0.75, 0.5))
-        elif kind == "trap_snap":
-            self.add_fx("burst", x, z, 0.5, radius=1.8, color=(1.0, 0.5, 0.3))
-            self.add_fx("poof", x, z, 0.4, color=(1.0, 0.8, 0.5))
-        elif kind == "heal":
-            self.add_fx("ring_up", x, z, 0.8, radius=0.9, color=(0.5, 1.0, 0.6))
-        elif kind == "cleanse":
-            self.add_fx("ring_up", x, z, 0.8, radius=1.0, color=(0.85, 0.97, 1.0))
-            self.add_fx("poof", x, z, 0.5, color=(0.9, 1.0, 1.0))
-        elif kind == "holy":
-            self.add_fx("burst", x, z, 0.9, radius=rr, color=(1.0, 0.92, 0.55))
-            self.add_fx("pillar", x, z, 0.9, radius=1.0, color=(1.0, 0.95, 0.6), h=9.0)
-            self.add_fx("ring_up", x, z, 1.0, radius=rr * 0.5, color=(1.0, 0.95, 0.7))
-        elif kind == "vine":
-            self.add_fx("line", x, z, 0.5, color=(0.45, 0.95, 0.4), x2=ev["x2"], z2=ev["z2"], w=ev.get("w", 1.3))
-        elif kind == "petal_burst":
-            self.add_fx("burst", x, z, 0.6, radius=rr, color=(1.0, 0.65, 0.8))
-            self.add_fx("shards", x, z, 0.8, radius=rr, color=(1.0, 0.7, 0.85))
-        elif kind == "shield":
-            self.add_fx("ring_up", x, z, 0.8, radius=1.0, color=(0.7, 0.9, 1.0))
-        elif kind == "wind":
-            self.add_fx("ring_up", x, z, 0.8, radius=1.1, color=(0.7, 1.0, 0.8))
-        elif kind == "zone_start":
-            col = (1.0, 0.92, 0.55) if ev.get("style") == "sanctuary" else (0.5, 1.0, 0.5)
-            self.add_fx("burst", x, z, 0.6, radius=rr, color=col)
-        elif kind == "pierce":
-            self.add_fx("line", x, z, 0.25, color=(0.7, 0.9, 1.0), x2=ev["x2"], z2=ev["z2"], w=0.4)
         elif kind.endswith("_hit"):
             style = kind[:-4]
-            col = {"knife": (0.9, 0.95, 1.0), "knife_fast": (0.9, 0.95, 1.0), "hook": (0.85, 0.7, 0.4),
-                   "chain": (0.55, 0.9, 0.9), "giant_arrow": (1.0, 0.9, 0.5), "light_bolt": (1.0, 0.9, 0.5),
-                   "leaf_bolt": (0.5, 0.95, 0.4), "snowball": (0.95, 0.97, 1.0)}.get(style, (0.9, 0.95, 1.0))
+            col = (0.95, 0.97, 1.0) if style == "snowball" else (0.9, 0.95, 1.0)
             self.add_fx("poof", x, z, 0.35, color=col)
-            if style == "giant_arrow":
-                self.add_fx("burst", x, z, 0.5, radius=2.0, color=col)
 
     def add_chat(self, parts):
         self.chat_lines.append((time.time(), parts))
@@ -1396,7 +1299,7 @@ class GameScene(Scene):
             self.click_marker = (x, z, time.time())
 
     def aim_of(self, slot):
-        """슬롯의 스킬 조준 방식 (line/cone/ground/teleport/ally/self)."""
+        """슬롯의 스킬 조준 방식 (line/cone/ground/teleport/circle/enemy/self)."""
         data = self.my_data()
         if not data or slot not in SLOTS:
             return "line"
@@ -1674,7 +1577,7 @@ class GameScene(Scene):
         for cid, e in self.champs.items():
             e.step(dt)
             st = e.d["st"] if e.d else ()
-            want = 2.2 if "rope" in st else ((1.1 if not e.ca else 2.0) if "air" in st else 0.0)
+            want = (1.1 if not e.ca else 2.0) if "air" in st else 0.0
             e.lift += (want - e.lift) * min(1.0, dt * 12.0)
             if e.d and e.ca is None:
                 e.ca = self.app.models.new_champ_anim(self.champ_info[cid]["c"]) or False
@@ -1888,11 +1791,7 @@ class GameScene(Scene):
             if d["dead"]:
                 # 죽은 뒤 잠깐 쓰러진 모습을 보여 주고 서서히 사라진다
                 if ca and ca.corpse_visible:
-                    if ca.is_rig:
-                        ca.draw(r, (1.0, 1.0, 1.0, ca.alpha))
-                    else:
-                        r.draw(mesh, model_matrix(e.x, 0.0, e.z, rot_y=facing_to_rot(e.f), scale=CHAMP_SCALE),
-                               tint=(1.0, 1.0, 1.0, ca.alpha), bones=ca.bones())
+                    ca.draw(r, (1.0, 1.0, 1.0, ca.alpha))
                 continue
             st = d["st"]
             self.vfx.status(st, e.x, e.z, e.lift, info["tm"] == self.my_team, d.get("sh", 0) > 0)
@@ -1903,7 +1802,7 @@ class GameScene(Scene):
             else:
                 ring_col = (1.0, 0.3, 0.3, 0.85)
             lift = e.lift
-            big = 1.6 if (ca and ca.is_rig) else 1.0           # 거미 같은 큰 몸은 그림자도 크게
+            big = 1.6 if ca else 1.0                           # 거미 같은 큰 몸은 그림자도 크게
             if big > 1:
                 lift = ca.lift * SC_RIG + e.lift               # 점프 중 높이는 리그가 직접 계산한다 (+ 에어본)
             r.draw_transparent(m.shadow, model_matrix(e.x, 0.03, e.z, scale=0.65 * big * CHAMP_SCALE),
@@ -1913,7 +1812,7 @@ class GameScene(Scene):
             bob = abs(math.sin(t * 10 + cid)) * 0.06 if anim == 1 else 0.0
             tilt = 0.08 if anim == 1 else 0.0
             if ca:
-                bob = tilt = 0.0           # 몸 움직임은 뼈대 동작이 맡는다
+                bob = tilt = 0.0           # 몸 움직임은 리그가 맡는다
             tint = [1.0, 1.0, 1.0, 1.0]
             emis = [0.0, 0.0, 0.0]
             if "slow" in st:
@@ -1926,23 +1825,17 @@ class GameScene(Scene):
                 tint = [0.65, 1.0, 0.9, 0.55]
             if "buff" in st:
                 emis = [0.05, 0.12, 0.25]
-            if "vamp" in st:
-                emis[0] += 0.25
-                emis[2] += 0.05
-            if "pierce" in st:
-                emis[1] += 0.03
-                emis[2] += 0.05
             if "air" in st and not ca:
                 tilt = 0.35 * math.sin(t * 9)
             if cid == hov_id:
                 emis = [v + 0.15 for v in emis]
-            if ca and ca.is_rig:
+            if ca:
                 r.y_offset = e.lift + (0.12 * math.sin(t * 6 + cid) * min(1.0, e.lift) if e.lift > 0.05 else 0.0)
                 ca.draw(r, tuple(tint), emis)
                 r.y_offset = 0.0
             else:
                 r.draw(mesh, model_matrix(e.x, bob + lift, e.z, rot_y=facing_to_rot(e.f), rot_x=tilt, scale=CHAMP_SCALE),
-                       tint=tuple(tint), emissive=emis, bones=ca.bones() if ca else None)
+                       tint=tuple(tint), emissive=emis)
             head = 2.15 * CHAMP_SCALE + lift
             mid = 1.0 * CHAMP_SCALE + lift                      # 몸 한가운데 높이 (보호막·강화 구)
             if "stun" in st:
@@ -1961,37 +1854,12 @@ class GameScene(Scene):
                     a = k / 6 * math.tau + 0.3
                     r.draw(m.relic, model_matrix(e.x + math.cos(a) * 0.5, 0.25, e.z + math.sin(a) * 0.5, scale=0.55,
                                                  rot_y=a), tint=(0.5, 0.75, 0.3, 1))
-            if "marked" in st:
-                for j in range(2):
-                    ph = (t * 1.4 + j * 0.5) % 1.0
-                    r.draw_transparent(m.ring, model_matrix(e.x, mid, e.z, scale=(0.4 + ph * 0.5) * CHAMP_SCALE),
-                                       (1.0, 0.8, 0.35, 0.9 * (1 - ph)), additive=True)
-            if d.get("sh", 0) > 0 or "undying" in st or "counter" in st:
-                if "undying" in st:
-                    sc, col = (1.0, 0.86, 0.35, 0.3 + 0.08 * math.sin(t * 10)), 1.05
-                elif "counter" in st:
-                    sc, col = (1.0, 0.72, 0.3, 0.2), 0.95
-                else:
-                    sc, col = (0.7, 0.9, 1.0, 0.17), 0.9
+            if d.get("sh", 0) > 0:
+                sc, col = (0.7, 0.9, 1.0, 0.17), 0.9
                 sc = (*fx_color(sc[:3], info["tm"] == self.my_team, False)[0], sc[3])      # 아군 파랑 / 적 빨강
                 r.draw_transparent(m.orb, model_matrix(e.x, mid, e.z, scale=col * CHAMP_SCALE), sc, additive=True)
-            if "echo" in st:
-                r.draw_transparent(m.orb, model_matrix(e.x, mid, e.z, scale=0.85 * CHAMP_SCALE), (*fx_color((0.9, 0.6, 0.25), info["tm"] == self.my_team, False)[0], 0.13),
-                                   additive=True)
             if "immune" in st:
                 r.draw_transparent(m.orb, model_matrix(e.x, mid, e.z, scale=0.9 * CHAMP_SCALE), (1.0, 1.0, 1.0, 0.13),
-                                   additive=True)
-            rp = d.get("rp")
-            if rp:
-                # 외줄: 두 말뚝 사이에 팽팽하게 걸린 줄
-                dx, dz = rp[2] - rp[0], rp[3] - rp[1]
-                ang = math.atan2(dx, dz)
-                r.draw(self.beam, model_matrix(rp[0], 2.15, rp[1], rot_y=ang, sx=0.06, sy=0.06, sz=math.hypot(dx, dz)),
-                       tint=(0.85, 0.7, 0.42, 1), unlit=0.6)
-                for px, pz in ((rp[0], rp[1]), (rp[2], rp[3])):
-                    r.draw(self.pillar, model_matrix(px, 0.0, pz, sx=0.08, sy=2.2, sz=0.08), tint=(0.5, 0.34, 0.2, 1))
-            if "emp" in st:
-                r.draw_transparent(m.orb, model_matrix(e.x, mid, e.z, scale=0.9 * CHAMP_SCALE), (0.5, 0.85, 1.0, 0.18),
                                    additive=True)
             if d.get("rc", 0) > 0:
                 # 귀환 중: 발밑 원 + 위로 올라가는 고리
@@ -2055,98 +1923,39 @@ class GameScene(Scene):
             total = max(0.05, self.ef_total.get(eid, 0.8))
             prog = 1 - max(0.0, left) / total
             pulse = 0.25 + 0.15 * math.sin(t * 12)
-            col, al = fx_color((0.75, 0.9, 1.0) if team == self.my_team else (1.0, 0.45, 0.35), team == self.my_team,
-                               style in SUPPORT_ZONES)
+            col, al = fx_color((0.75, 0.9, 1.0) if team == self.my_team else (1.0, 0.45, 0.35), team == self.my_team, False)
             r.draw_transparent(m.disc, model_matrix(x, 0.06, z, scale=radius), (*col, pulse * al))
             r.draw_transparent(m.ring, model_matrix(x, 0.07, z, scale=radius), (*col, 0.9 * al))
             if left > 0:
                 r.draw_transparent(m.disc, model_matrix(x, 0.08, z, scale=radius * max(0.0, prog)), (*col, 0.35 * al))
-            if style == "bell" and left > 0:
-                # 하늘에서 떨어지는 대종
-                r.draw(m.bell, model_matrix(x, 12.0 * (1 - prog) ** 2, z, scale=radius / 1.05), tint=(1, 1, 1, 1),
-                       emissive=(0.12, 0.08, 0.02))
 
-        # 오래 남는 장판: 성역 / 대자연의 정원 / 사냥 덫 / 대종 감옥
+        # 오래 남는 장판: 독 거미줄 / 독 웅덩이 / 불길 웅덩이
         for row, recv in self.zones:
             zid, style, team, x, z, radius, remaining, total = row
             left = remaining - (now - recv)
             if left <= 0:
                 continue
             ally = team == self.my_team
-            if style == "sanctuary":
-                col, al = fx_color((1.0, 0.92, 0.55), ally, True)
-                r.draw_transparent(m.disc, model_matrix(x, 0.06, z, scale=radius),
-                                   (*col, (0.2 + 0.06 * math.sin(t * 4)) * al * 1.6))
-                r.draw_transparent(m.ring, model_matrix(x, 0.07, z, scale=radius), (*col, 0.9 * al))
-                r.draw_transparent(m.ring_thin, model_matrix(x, 0.08, z, scale=radius * (0.55 + 0.05 * math.sin(t * 3)),
-                                                             rot_y=t), (*col, 0.6 * al), additive=True)
-                for i in range(9):
-                    ph = (t * 0.5 + i / 9) % 1.0
-                    a = i * 2.4 + x
-                    rr = radius * (0.2 + 0.7 * ((i * 37) % 10) / 10)
-                    r.draw_transparent(m.orb, model_matrix(x + math.cos(a) * rr, ph * 2.4, z + math.sin(a) * rr,
-                                                           scale=0.07), (*col, 0.85 * (1 - ph) * al), additive=True)
-            elif style == "garden":
-                col, al = fx_color((0.5, 1.0, 0.5), ally, True)
-                r.draw_transparent(m.disc, model_matrix(x, 0.06, z, scale=radius),
-                                   (*col, (0.17 + 0.05 * math.sin(t * 3)) * al * 1.6))
-                r.draw_transparent(m.ring, model_matrix(x, 0.07, z, scale=radius), (*col, 0.9 * al))
-                for i in range(14):
-                    a = i * 2.4 + z
-                    rr = radius * (0.25 + 0.7 * ((i * 53) % 10) / 10)
-                    px, pz = x + math.cos(a) * rr, z + math.sin(a) * rr
-                    flower = (1.0, 0.62, 0.78) if i % 3 else (1.0, 0.88, 0.4)
-                    r.draw(m.orb, model_matrix(px, 0.1 + 0.03 * math.sin(t * 2 + i), pz, scale=0.1), tint=(*flower, 1.0),
-                           unlit=0.6)
-                    r.draw(m.relic, model_matrix(px, 0.2, pz, scale=0.35, rot_y=i), tint=(0.45, 0.8, 0.35, 1))
-                for i in range(6):
-                    ph = (t * 0.45 + i / 6) % 1.0
-                    a = i * 1.7 + 0.5
-                    r.draw_transparent(m.orb, model_matrix(x + math.cos(a) * radius * 0.6, ph * 2.6,
-                                                           z + math.sin(a) * radius * 0.6, scale=0.07),
-                                       (*col, 0.8 * (1 - ph) * al), additive=True)
-            elif style == "web":                                # 독 거미줄 둥지 (거미 여왕): 바닥 거미줄 + 독 방울
+            if style == "web":                                  # 독 거미줄 둥지 (거미 여왕): 바닥 거미줄 + 독 방울
                 col = fx_color((0.7, 0.95, 0.35), ally, False)[0]
                 self.vfx.web_zone(x, z, radius, ally, left, total)
             elif style == "venom":                              # 독 웅덩이 (이무기): 끈적한 독액 바닥 + 거품
                 self.vfx.venom_zone(x, z, radius, ally, left, total)
             elif style == "fire":                               # 불길 웅덩이 (용): 그을린 바닥 + 용암 균열 + 불꽃
                 self.vfx.fire_zone(x, z, radius, ally, left, total)
-            elif style == "trap":
-                r.draw(m.trap, model_matrix(x, 0.0, z, rot_y=zid), emissive=(0.05, 0.05, 0.08))
-                r.draw_transparent(m.ring_thin, model_matrix(x, 0.06, z, scale=radius),
-                                   (*fx_color((0.95, 0.85, 0.5), ally, False)[0], 0.55))
-            elif style == "cage":
-                col = fx_color((1.0, 0.72, 0.3), ally, False)[0]
-                r.draw_transparent(m.disc, model_matrix(x, 0.06, z, scale=radius), (*col, 0.18 + 0.05 * math.sin(t * 6)))
-                r.draw_transparent(m.ring, model_matrix(x, 0.07, z, scale=radius), (*col, 0.95))
-                r.draw_transparent(m.ring_thin, model_matrix(x, 0.08, z, scale=radius * max(0.05, left / max(0.1, total))),
-                                   (*fx_color((1.0, 0.92, 0.55), ally, False)[0], 0.8), additive=True)
-                r.draw_transparent(m.bell, model_matrix(x, 0.0, z, scale=radius / 1.05), (1.0, 1.0, 1.0, 0.42),
-                                   unlit=0.15)
 
-        # 줄 말뚝
+        # 새끼 거미 고치: 부화가 가까울수록 흔들리고 커진다
         for row, recv in self.anchors:
             aid, team, x, z, hp, remaining = row[:6]
-            cocoon = len(row) > 6 and row[6] == 1
             left = remaining - (now - recv)
-            if cocoon:                                      # 새끼 거미 고치: 부화가 가까울수록 흔들리고 커진다
-                total = max(0.1, row[7])
-                p = max(0.0, min(1.0, 1.0 - left / total))
-                wob = math.sin(t * (8 + 24 * p)) * 0.12 * p
-                r.draw_transparent(m.shadow, model_matrix(x, 0.03, z, scale=0.6), (0, 0, 0, 0.3))
-                r.draw_transparent(m.ring, model_matrix(x, 0.05, z, scale=0.8),
-                                   (0.3, 0.6, 1.0, 0.85) if team == self.my_team else (1.0, 0.3, 0.3, 0.85))
-                r.draw(m.cocoon, model_matrix(x, 0.0, z, rot_y=aid, rot_x=wob, scale=1.0 + 0.12 * p * math.sin(t * 20)),
-                       emissive=(0.12 + 0.35 * p * p + (0.2 if aid == hov_id else 0), 0.07 + 0.2 * p * p, 0.02))
-                continue
-            if left < 1.0 and int(t * 10) % 2 == 0:
-                continue                                    # 사라지기 직전에는 깜빡임
-            ally = team == self.my_team
-            r.draw_transparent(m.shadow, model_matrix(x, 0.03, z, scale=0.4), (0, 0, 0, 0.3))
-            r.draw_transparent(m.ring, model_matrix(x, 0.05, z, scale=0.75),
-                               (0.3, 0.6, 1.0, 0.85) if ally else (1.0, 0.3, 0.3, 0.85))
-            r.draw(m.anchor, model_matrix(x, 0.0, z, rot_y=aid), emissive=(0.2, 0.2, 0.2) if aid == hov_id else (0, 0, 0))
+            total = max(0.1, row[7])
+            p = max(0.0, min(1.0, 1.0 - left / total))
+            wob = math.sin(t * (8 + 24 * p)) * 0.12 * p
+            r.draw_transparent(m.shadow, model_matrix(x, 0.03, z, scale=0.6), (0, 0, 0, 0.3))
+            r.draw_transparent(m.ring, model_matrix(x, 0.05, z, scale=0.8),
+                               (0.3, 0.6, 1.0, 0.85) if team == self.my_team else (1.0, 0.3, 0.3, 0.85))
+            r.draw(m.cocoon, model_matrix(x, 0.0, z, rot_y=aid, rot_x=wob, scale=1.0 + 0.12 * p * math.sin(t * 20)),
+                   emissive=(0.12 + 0.35 * p * p + (0.2 if aid == hov_id else 0), 0.07 + 0.2 * p * p, 0.02))
 
         # 로컬 이펙트
         for f in self.fx:
@@ -2171,23 +1980,6 @@ class GameScene(Scene):
                     rr = f["r"] * (0.2 + 0.8 * ((i * 37) % 10) / 10)
                     r.draw(m.relic, model_matrix(f["x"] + math.cos(a) * rr, (1 - k) * 2.5, f["z"] + math.sin(a) * rr,
                                                  scale=0.4, rot_y=a), tint=tc, emissive=(0.3, 0.4, 0.5))
-            elif f["kind"] == "line":
-                dx, dz = f["x2"] - f["x"], f["z2"] - f["z"]
-                w = f.get("w", 1.0) * (1.0 - 0.4 * k)
-                r.draw_transparent(self.beam, model_matrix(f["x"], 0.1, f["z"], rot_y=math.atan2(dx, dz), sx=w, sy=0.06,
-                                                           sz=math.hypot(dx, dz)), (*col, 0.6 * (1 - k) * al), additive=True)
-            elif f["kind"] == "sector":
-                r.draw_transparent(self.sector_mesh(f["w"]), model_matrix(f["x"], 0.1, f["z"], rot_y=facing_to_rot(f["a"]),
-                                                                          scale=f["r"] * (0.6 + 0.4 * min(1.0, k * 3))),
-                                   (*col, 0.55 * (1 - k) * al), additive=True)
-            elif f["kind"] == "pillar":
-                h = f.get("h", 8.0)
-                r.draw_transparent(self.pillar, model_matrix(f["x"], 0.0, f["z"], sx=f["r"] * (1 - 0.5 * k), sy=h,
-                                                             sz=f["r"] * (1 - 0.5 * k)), (*col, 0.5 * (1 - k) * al),
-                                   additive=True)
-            elif f["kind"] == "bell_lift":
-                r.draw_transparent(m.bell, model_matrix(f["x"], k * 10.0, f["z"], scale=f["r"] / 1.05),
-                                   (1.0, 1.0, 1.0, 0.45 * (1 - k)), unlit=0.15)
 
         self.vfx.draw(cam)
 
@@ -2228,7 +2020,7 @@ class GameScene(Scene):
         if self.settings_open or self.chat_open:
             return "default"
         mouse = self.mouse_pos()
-        if self.aiming and self.aiming in SLOTS and self.aim_of(self.aiming) in ("enemy", "ally"):
+        if self.aiming and self.aiming in SLOTS and self.aim_of(self.aiming) == "enemy":
             return "target"
         if HUD_RECT.collidepoint(mouse) or MINIMAP.collidepoint(mouse) or (self.shop_open and self.shop_panel().collidepoint(mouse)):
             return "default"
@@ -2369,21 +2161,14 @@ class GameScene(Scene):
             self.ind_range = (me.x, me.z, shown, col)
         if mode == "line":
             r.draw_transparent(m.ring_thin, model_matrix(me.x, 0.06, me.z, scale=rng), (*col, 0.45))
-            if typ == "hook_dash" and ab.get("bush_range"):
-                r.draw_transparent(m.ring_thin, model_matrix(me.x, 0.06, me.z, scale=ab["bush_range"]), (*col, 0.18))
-            if typ == "knife_throw":
-                fan = max(20, ab.get("fan_angle", 16) * 2)
-                r.draw_transparent(self.sector_mesh(fan), model_matrix(me.x, 0.07, me.z, rot_y=ang, scale=rng),
-                                   (*col, 0.28))
-            else:
-                length = min(dist, rng) if typ == "dash" else rng
-                width = ab.get("width", 0.9)
-                if width > 0:
-                    r.draw_transparent(self.quad, model_matrix(me.x, 0.07, me.z, rot_y=ang, sx=width, sy=1, sz=length),
-                                       (*col, 0.35))
-                if typ == "dash":
-                    ex, ez = me.x + dx / dist * length, me.z + dz / dist * length
-                    r.draw_transparent(m.ring, model_matrix(ex, 0.08, ez, scale=0.6), (*col, 0.9))
+            length = min(dist, rng) if typ == "dash" else rng
+            width = ab.get("width", 0.9)
+            if width > 0:
+                r.draw_transparent(self.quad, model_matrix(me.x, 0.07, me.z, rot_y=ang, sx=width, sy=1, sz=length),
+                                   (*col, 0.35))
+            if typ == "dash":                                # 점멸: 도착 지점
+                ex, ez = me.x + dx / dist * length, me.z + dz / dist * length
+                r.draw_transparent(m.ring, model_matrix(ex, 0.08, ez, scale=0.6), (*col, 0.9))
         elif mode == "cone":
             r.draw_transparent(m.ring_thin, model_matrix(me.x, 0.06, me.z, scale=rng), (*col, 0.35))
             crng = ab.get("cone_range", rng)                 # 부채꼴 바람의 실제 사거리 (회오리는 더 멀리 간다)
@@ -2462,20 +2247,6 @@ class GameScene(Scene):
                     self.draw_slam_area(best.x, best.z, ab, (1.0, 0.45, 0.35) if cd <= 0 and not unlearned else col)
                 elif typ == "serpent_slam":                  # 이무기 내려찍기: 기절 범위(진하게) + 충격파 범위(연하게)
                     self.draw_serpent_slam_area(best.x, best.z, ab, (1.0, 0.45, 0.35) if cd <= 0 and not unlearned else col)
-        elif mode == "ally":
-            r.draw_transparent(m.ring_thin, model_matrix(me.x, 0.06, me.z, scale=rng), (*col, 0.5))
-            best, bd = None, 1e9
-            for cid, e in self.champs.items():
-                if not e.visible or not e.d or e.d["dead"] or self.champ_info[cid]["tm"] != self.my_team:
-                    continue
-                if math.hypot(e.x - me.x, e.z - me.z) > rng + 0.5:
-                    continue
-                dd = math.hypot(e.x - mx, e.z - mz)
-                if dd < bd:
-                    best, bd = e, dd
-            if best is not None:
-                r.draw_transparent(m.ring, model_matrix(best.x, 0.09, best.z, scale=1.05), (0.55, 1.0, 0.6, 0.95))
-                r.draw_transparent(m.disc, model_matrix(best.x, 0.08, best.z, scale=1.0), (0.55, 1.0, 0.6, 0.22))
         else:   # self (즉시 시전): 효과 범위가 있으면 내 주변에 표시
             radius = ab.get("radius")
             if radius:
@@ -2577,28 +2348,14 @@ class GameScene(Scene):
             ui.bar(surf, (x0, y0 + 12, 104, 5), d["mp"] / max(1, d["mmp"]), (80, 140, 255), border=None)
             ui.text(surf, info["n"], (p[0], y0 - 4), 13, ui.TEXT, anchor="midbottom")
             self.draw_status_badges(surf, p[0], y0 + 20, d["st"])
-            if "bushq" in d["st"]:
-                # 부쉬 안의 외줄 광대: 늘어난 사거리로 줄을 걸 수 있다는 경고
-                pulse = 0.6 + 0.4 * math.sin(time.time() * 8)
-                pygame.draw.polygon(surf, (int(255 * pulse), 70, 50),
-                                    [(x0 + 118, y0 - 2), (x0 + 108, y0 + 16), (x0 + 128, y0 + 16)])
-                ui.text(surf, "!", (x0 + 118, y0 + 9), 13, (255, 255, 255), anchor="center", bold=True, shadow=False)
-        # 줄 말뚝: 부수는 데 필요한 평타 수
+        # 거미 고치: 미니언과 같은 일반 체력바
         for row, recv in self.anchors:
             aid, team, ax, az, ahp, remaining = row[:6]
-            cocoon = len(row) > 6 and row[6] == 1
-            p = cam.world_to_screen(ax, 1.3 if cocoon else 1.15, az)
+            p = cam.world_to_screen(ax, 1.3, az)
             if p:
                 col = (90, 170, 255) if team == self.my_team else (230, 70, 60)
-                if cocoon:                                  # 고치: 미니언과 같은 일반 체력바
-                    mhp = row[8] if len(row) > 8 else max(1, ahp)
-                    ui.bar(surf, (int(p[0]) - 20, int(p[1]), 40, 5), ahp / max(1, mhp), col)
-                    continue
-                pips = 3
-                for i in range(pips):
-                    rect = pygame.Rect(int(p[0]) - pips * 7 - 1 + i * 15, int(p[1]), 12, 6)
-                    pygame.draw.rect(surf, col if i < ahp else (40, 44, 56), rect)
-                    pygame.draw.rect(surf, (0, 0, 0), rect, 1)
+                mhp = row[8] if len(row) > 8 else max(1, ahp)
+                ui.bar(surf, (int(p[0]) - 20, int(p[1]), 40, 5), ahp / max(1, mhp), col)
 
     @staticmethod
     def draw_shield_segment(surf, x0, y0, w, h, hp, mhp, shield):

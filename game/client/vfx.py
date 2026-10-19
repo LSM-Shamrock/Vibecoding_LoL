@@ -24,10 +24,8 @@ TEAM_FX_MIX = 0.72                  # 팀 색 비율 (나머지는 스킬 고유
 SUPPORT_ALPHA = 0.55                # 피해 없이 효과만 주는 스킬 이펙트의 투명도 (피해 스킬은 1.0)
 SUPPORT_LIGHTEN = 0.35              # ... 그리고 그만큼 흰색 쪽으로 연하게
 # 피해를 주지 않고 효과(회복·보호막·강화·이동·약화)만 주는 이펙트
-SUPPORT_FX = {"heal", "cleanse", "shield", "wind", "buff", "anchor_set", "rope_up", "trap_set", "relic", "recall",
-              "flash", "teleport", "holy"}
+SUPPORT_FX = {"relic", "recall", "flash"}
 SUPPORT_SPELLS = {"heal", "ghost", "barrier", "cleanse", "exhaust"}      # 소환사 주문 중 피해 없는 것
-SUPPORT_ZONES = {"sanctuary", "garden"}
 
 
 def fx_color(col, ally, support):
@@ -48,19 +46,15 @@ MAX_PARTICLES = 700
 GOLD = (1.0, 0.85, 0.4)
 PALE = (0.92, 0.96, 1.0)
 STEEL = (0.85, 0.92, 1.0)
-BLOOD = (0.9, 0.12, 0.2)
 SOUL = (0.55, 0.35, 0.9)
 GHOST = (0.6, 0.85, 1.0)
 EARTH = (0.8, 0.62, 0.38)
 FIRE = (1.0, 0.5, 0.15)
 HOLY = (1.0, 0.93, 0.6)
-LEAF = (0.4, 0.9, 0.35)
-PETAL = (1.0, 0.65, 0.8)
 BRONZE = (0.9, 0.7, 0.35)
 CREAM = (0.96, 0.9, 0.78)               # 거미줄
 POISON = (1.0, 0.38, 0.2)               # 독침
 VENOM = (0.6, 0.95, 0.3)                # 독 거미줄 둥지
-SOUND = (1.0, 0.8, 0.35)
 TEAL = (0.4, 0.95, 0.82)                # 이무기의 물기운
 TOXIC = (0.5, 1.0, 0.45)                # 이무기의 독
 TOXIC_DARK = (0.12, 0.5, 0.28)          # (예전 초록 독 바닥: 지금은 쓰지 않음)
@@ -294,28 +288,11 @@ class Vfx:
                       dur=dur * rr(0.7, 1.1), col=col, add=False, vel=(math.cos(a) * 1.5, rr(4, 8), math.sin(a) * 1.5),
                       grav=-22.0, rot=rr(0, math.tau), spin=rr(-9, 9), fade_pow=0.6, fade_in=0.01)
 
-    # ---- 돌격수 (바르고) ------------------------------------------------
+    # ---- 내려찍기 착지 ----------------------------------------------------
     def fx_slam(self, kind, ev):
         x, z, r = ev["x"], ev["z"], ev.get("r", 3.0)
-        style = ev.get("style", "slam")
-        if style == "slam":                                   # Q: 땅을 내려치는 충격 - 갈라진 땅과 튀는 돌
-            self.emit("crack", x, 0.06, z, size=r * 2.3, dur=1.1, col=(1.0, 0.85, 0.55), mode="flat", rot=rr(0, 6),
-                      fade_pow=0.7)
-            self.emit("glow", x, 0.1, z, size=r * 2.0, dur=0.3, col=GOLD, mode="flat")
-            self.shock(x, z, r, GOLD, 0.45)
-            self.dust_ring(x, z, r * 0.8, 10)
-            self.stones(x, z, r, 9)
-            self.burst("spark", x, 0.6, z, 8, r * 2.0, 0.5, 0.5, GOLD, up=3.0, grav=-8)
-        elif style == "sweep":                                # 낫 휘두르기: 몸 둘레를 도는 초승달 베기
-            base = rr(0, math.tau)
-            for k in range(3):
-                self.emit("slash", x, 0.9, z, size=r * 2.1, dur=0.38, delay=k * 0.05, col=SOUL, mode="flat",
-                          rot=base + k * 2.1, spin=-11.0, pivot=0.22, fade_pow=0.8, fade_in=0.02)
-            self.emit("arc", x, 0.95, z, size=r * 2.3, dur=0.35, col=PALE, mode="flat", rot=base, spin=-11.0, pivot=0.28,
-                      fade_pow=0.8)
-            self.burst("glow", x, 0.9, z, 8, r * 1.6, 0.6, 0.55, SOUL, up=0.5, size_to=0.1)
-            self.burst("spark", x, 1.0, z, 8, r * 2.2, 0.35, 0.4, PALE, up=1.0)
-        elif style == "pounce":                               # 거미의 점프 덮치기: 갈라진 땅, 먼지, 흩어지는 거미줄
+        style = ev.get("style", "pounce")
+        if style == "pounce":                               # 거미의 점프 덮치기: 갈라진 땅, 먼지, 흩어지는 거미줄
             self.emit("crack", x, 0.06, z, size=r * 2.4, dur=1.2, col=CREAM, mode="flat", rot=rr(0, 6), fade_pow=0.8)
             self.emit("web", x, 0.08, z, size=r * 1.5, size_to=r * 2.6, dur=0.8, col=CREAM, mode="flat", rot=rr(0, 6),
                       fade_pow=1.2)
@@ -361,103 +338,12 @@ class Vfx:
             self.stones(x, z, r, 12)
             self.pillar(x, z, TEAL, 9.0, 1.8, 0.55)
             self.burst("glow", x, 0.5, z, 16, r * 2.2, 0.45, 0.8, TEAL, up=6.0, grav=-15)
-        else:                                                 # 강습 착지: 분화구, 불길, 충격파
-            self.emit("crack", x, 0.06, z, size=r * 2.8, dur=1.6, col=(1.0, 0.7, 0.3), mode="flat", rot=rr(0, 6),
-                      fade_pow=0.8)
-            self.emit("glow", x, 0.1, z, size=r * 2.6, dur=0.45, col=FIRE, mode="flat")
-            self.shock(x, z, r, FIRE, 0.55)
-            self.shock(x, z, r * 1.4, GOLD, 0.7, 0.1)
-            self.dust_ring(x, z, r, 14)
-            self.stones(x, z, r, 14)
-            for _ in range(10):
-                a = rr(0, math.tau)
-                d = r * rr(0.1, 0.8)
-                self.emit("flame", x + math.cos(a) * d, 0.3, z + math.sin(a) * d, size=(rr(0.7, 1.2), rr(1.3, 2.2)),
-                          dur=rr(0.5, 0.9), col=FIRE, col_to=(1.0, 0.8, 0.3), vel=(0, rr(1.5, 3.5), 0), fade_pow=0.9)
-            self.pillar(x, z, GOLD, 10.0, 1.6, 0.5)
 
-    def fx_buff(self, kind, ev):
-        x, z = ev["x"], ev["z"]
-        style = ev.get("style", "buff")
-        if style == "counter":                                # 반격의 방어막: 육각 보호막이 몸을 감싼다
-            self.emit("hex", x, 1.15, z, size=2.9, size_to=3.4, dur=0.9, col=GOLD, fade_in=0.05)
-            self.emit("ring", x, 0.1, z, size=2.0, size_to=3.0, dur=0.6, col=GOLD, mode="flat")
-            self.burst("spark", x, 1.1, z, 8, 2.0, 0.4, 0.5, PALE, up=0.5)
-        elif style == "vamp":                                 # 흡혈: 핏방울이 소용돌이치며 솟는다
-            for i in range(12):
-                a = i / 12 * math.tau
-                self.emit("drop", x, 0.2, z, size=(0.35, 0.5), dur=0.9, delay=i * 0.03, col=BLOOD, col_to=(0.5, 0.0, 0.1),
-                          orbit=(x, z, 1.5, 0.3, a, 5.0, 2.2), rot=0.0, fade_pow=0.8)
-            self.emit("ring", x, 0.1, z, size=1.4, size_to=2.6, dur=0.6, col=BLOOD, mode="flat")
-        elif style == "ghost":                                # 망령 이동: 영혼 소용돌이
-            self.emit("swirl", x, 0.12, z, size=3.0, size_to=1.2, dur=0.9, col=GHOST, mode="flat", spin=7.0)
-            self.burst("glow", x, 1.0, z, 8, 1.4, 0.7, 0.8, GHOST, up=1.5, size_to=0.1)
-        elif style == "echo":                                 # 메아리: 소리 파문이 겹겹이 퍼진다
-            for k in range(3):
-                self.emit("ring", x, 0.1, z, size=1.0, size_to=3.4 + k * 0.6, dur=0.8, delay=k * 0.14, col=SOUND,
-                          mode="flat", fade_pow=1.2)
-            for i in range(4):
-                a = rr(0, math.tau)
-                self.emit("note", x, 1.0, z, size=0.55, dur=0.9, col=SOUND, vel=(math.cos(a) * 1.6, 1.4, math.sin(a) * 1.6),
-                          rot=rr(-0.4, 0.4), fade_pow=0.8)
-        else:
-            self.emit("ring", x, 0.1, z, size=1.0, size_to=2.4, dur=0.7, col=PALE, mode="flat")
-            self.burst("spark", x, 1.0, z, 6, 1.6, 0.4, 0.6, PALE, up=1.5)
-
-    def fx_knock(self, kind, ev):                             # 밀치기: 앞으로 밀어내는 화살표 물결
-        x, z, x2, z2 = ev["x"], ev["z"], ev["x2"], ev["z2"]
-        dx, dz = x2 - x, z2 - z
-        ln = math.hypot(dx, dz) or 1.0
-        rot = math.atan2(dx, dz)
-        w = ev.get("w", 2.0)
-        for k in range(4):
-            f = (k + 0.5) / 4
-            self.emit("chevron", x + dx * f, 0.12, z + dz * f, size=(w * 0.9, w * 0.9), dur=0.35, delay=k * 0.05,
-                      col=GOLD, mode="flat", rot=rot, vel=(dx / ln * 6, 0, dz / ln * 6), fade_pow=0.8)
-        self.emit("streak", x, 0.1, z, size=(w * 0.8, ln * 1.1), dur=0.3, col=PALE, mode="flat", rot=rot + math.pi,
-                  pivot=-0.5, alpha=0.7)
-        self.burst("spark", x2, 0.7, z2, 6, 3.0, 0.4, 0.4, GOLD, up=1.0)
-
-    def fx_teleport(self, kind, ev):                          # 강습: 떠난 자리에 먼지 기둥, 도착지에 불덩이가 떨어진다
-        x, z, x2, z2 = ev["x"], ev["z"], ev["x2"], ev["z2"]
-        self.pillar(x, z, PALE, 7.0, 1.1, 0.5)
-        self.dust_ring(x, z, 1.4, 7)
-        self.emit("flame", x2, 12.0, z2, size=(2.2, 4.4), dur=0.55, col=FIRE, col_to=GOLD, vel=(0, -22, 0), fade_pow=0.3,
-                  fade_in=0.01)
-        self.emit("glow", x2, 0.1, z2, size=6.0, dur=0.6, col=FIRE, mode="flat")
-
-    # ---- 저승사자 (카론) ------------------------------------------------
     def fx_hit(self, kind, ev):
         """투사체가 맞았을 때: 투사체 종류마다 다른 모습."""
         x, z = ev["x"], ev["z"]
         style = kind[:-4]
-        if style in ("knife", "knife_fast"):                  # 단검: 번쩍이는 베기 자국
-            self.emit("slash", x, 1.0, z, size=1.7, dur=0.25, col=STEEL, rot=rr(-1.2, 1.2), fade_in=0.01)
-            self.emit("spark", x, 1.0, z, size=1.4, dur=0.25, col=PALE)
-            self.burst("spark", x, 1.0, z, 5, 3.5, 0.3, 0.3, STEEL, up=1.0)
-        elif style == "hook":                                 # 갈고리: 걸리는 순간 밧줄이 팽팽해진다
-            self.emit("spark", x, 1.0, z, size=1.6, dur=0.3, col=BRONZE)
-            self.emit("ring", x, 0.8, z, size=0.6, size_to=1.8, dur=0.3, col=BRONZE, mode="flat")
-            self.burst("spark", x, 1.0, z, 5, 3.0, 0.3, 0.3, BRONZE, up=0.5)
-        elif style == "chain":                                # 영혼 사슬: 사슬이 몸을 휘감는다
-            for i in range(5):
-                a = i / 5 * math.tau
-                self.emit("chain", x, 0.4, z, size=(0.5, 0.8), dur=0.7, delay=i * 0.04, col=SOUL,
-                          orbit=(x, z, 1.0, 0.45, a, 8.0, 1.2), rot=a, spin=3.0, fade_pow=0.7)
-            self.emit("ring", x, 0.1, z, size=1.0, size_to=2.2, dur=0.5, col=SOUL, mode="flat")
-            self.emit("glow", x, 1.0, z, size=2.2, dur=0.4, col=SOUL)
-        elif style == "giant_arrow":                          # 관통 화살: 큰 충격
-            self.emit("spark", x, 1.0, z, size=3.4, dur=0.35, col=GOLD)
-            self.shock(x, z, 1.8, GOLD, 0.4)
-            self.burst("shard", x, 0.8, z, 6, 4.0, 0.4, 0.5, GOLD, up=4.0, grav=-14, spin=8, add=True)
-        elif style == "light_bolt":                           # 빛 화살: 십자 섬광
-            self.emit("cross", x, 1.1, z, size=1.5, size_to=0.8, dur=0.35, col=HOLY, rot=rr(0, 0.6), fade_in=0.01)
-            self.emit("glow", x, 1.0, z, size=2.0, dur=0.35, col=HOLY)
-            self.burst("spark", x, 1.0, z, 5, 2.5, 0.3, 0.4, HOLY, up=1.5)
-        elif style == "leaf_bolt":                            # 잎사귀 화살: 잎이 흩날린다
-            self.burst("leaf", x, 1.0, z, 6, 3.0, 0.45, 0.8, LEAF, up=2.0, grav=-4, spin=6)
-            self.emit("glow", x, 1.0, z, size=1.6, dur=0.3, col=LEAF)
-        elif style == "web":                                  # 거미줄 덩어리: 터지며 거미줄이 달라붙는다
+        if style == "web":                                  # 거미줄 덩어리: 터지며 거미줄이 달라붙는다
             self.emit("web", x, 1.0, z, size=1.2, size_to=2.6, dur=0.7, col=CREAM, rot=rr(0, 6), fade_pow=1.1)
             self.emit("glow", x, 1.0, z, size=1.8, dur=0.3, col=CREAM)
             self.burst("spark", x, 1.0, z, 8, 3.0, 0.3, 0.4, CREAM, up=1.2)
@@ -479,111 +365,7 @@ class Vfx:
         else:
             self.emit("spark", x, 1.0, z, size=1.1, dur=0.22, col=PALE)
 
-    # ---- 종지기 (무진) --------------------------------------------------
-    def fx_cone(self, kind, ev):                              # 타종: 앞으로 퍼지는 소리 파동
-        x, z, r, a = ev["x"], ev["z"], ev.get("r", 5.5), ev["a"]
-        rot = facing_to_rot(a)
-        for k in range(3):
-            self.emit("wave", x, 0.2, z, size=(r * 1.5, r * 1.1), size_to=(r * 2.0, r * 1.5), dur=0.42, delay=k * 0.07,
-                      col=SOUND, mode="flat", rot=rot, vel=(math.sin(rot) * 4, 0, math.cos(rot) * 4), pivot=0.45,
-                      fade_pow=0.9)
-        self.emit("glow", x, 0.2, z, size=3.0, dur=0.3, col=GOLD, mode="flat")
-        for i in range(5):
-            d = rr(-0.5, 0.5)
-            self.emit("note", x, 1.2, z, size=0.5, dur=0.6, col=SOUND, vel=(math.sin(rot + d) * 6, 0.8, math.cos(rot + d) * 6),
-                      rot=rr(-0.4, 0.4), delay=i * 0.04, fade_pow=0.8)
-
-    def fx_silence_ring(self, kind, ev):                      # 정적의 종: 소리를 삼키는 보랏빛 파문
-        x, z, r = ev["x"], ev["z"], ev.get("r", 5.0)
-        self.emit("rune", x, 0.08, z, size=r * 2.0, dur=0.9, col=SOUL, mode="flat", spin=1.0, fade_pow=1.2)
-        for k in range(3):
-            self.emit("ring", x, 0.12, z, size=r * 0.3, size_to=r * 2.1, dur=0.6, delay=k * 0.12, col=SOUL, mode="flat",
-                      fade_pow=1.2)
-        for i in range(8):
-            a = i / 8 * math.tau
-            self.emit("note", x, 1.0, z, size=0.55, dur=0.9, col=SOUL, col_to=(0.2, 0.1, 0.4),
-                      vel=(math.cos(a) * r * 0.9, 1.0, math.sin(a) * r * 0.9), grav=-3.0, rot=rr(-0.5, 0.5), spin=rr(-3, 3),
-                      fade_pow=0.8)
-
-    def fx_bell_drop(self, kind, ev):                         # 대종 낙하: 종이 땅을 울린다
-        x, z, r = ev["x"], ev["z"], ev.get("r", 3.0)
-        self.emit("crack", x, 0.06, z, size=r * 2.2, dur=1.1, col=GOLD, mode="flat", rot=rr(0, 6))
-        for k in range(3):
-            self.emit("wave", x, 0.15, z, size=r * 1.0, size_to=r * 2.6, dur=0.6, delay=k * 0.1, col=SOUND, mode="flat",
-                      rot=k * 2.09, pivot=0.0)
-            self.emit("ring", x, 0.12, z, size=r * 0.5, size_to=r * 2.2, dur=0.6, delay=k * 0.1, col=SOUND, mode="flat")
-        self.dust_ring(x, z, r * 0.9, 10)
-        self.burst("note", x, 1.0, z, 6, r * 1.5, 0.6, 0.8, SOUND, up=3.0, grav=-5, spin=3)
-
-    def fx_cage_end(self, kind, ev):
-        x, z, r = ev["x"], ev["z"], ev.get("r", 3.0)
-        self.shock(x, z, r, SOUND, 0.5)
-        self.burst("spark", x, 1.0, z, 10, r * 1.5, 0.5, 0.6, GOLD, up=2.5, grav=-4)
-
-    # ---- 곡예사 (꼭두) --------------------------------------------------
-    def fx_knife_burst(self, kind, ev):                       # 삼도 던지기: 흩어지는 칼날 부채
-        x, z, a = ev["x"], ev["z"], ev["a"]
-        rot = facing_to_rot(a)
-        self.emit("fan", x, 0.9, z, size=(5.6, 5.6), dur=0.35, col=STEEL, mode="flat", rot=rot, pivot=0.47, fade_pow=1.0)
-        for i in range(5):
-            d = math.radians(-30 + i * 15)
-            self.emit("slash", x, 1.0, z, size=1.4, dur=0.25, col=PALE, rot=0.0, mode="flat",
-                      vel=(math.sin(rot + d) * 16, 0, math.cos(rot + d) * 16), spin=0.0)
-        self.emit("spark", x, 1.0, z, size=1.6, dur=0.2, col=PALE)
-
-    def fx_rope_pull(self, kind, ev):                         # 외줄 걸기: 팽팽한 밧줄
-        x, z, x2, z2 = ev["x"], ev["z"], ev["x2"], ev["z2"]
-        dx, dz = x2 - x, z2 - z
-        ln = math.hypot(dx, dz) or 1.0
-        rot = math.atan2(dx, dz)
-        self.emit("rope", x, 0.9, z, size=(0.55, ln), dur=0.4, col=BRONZE, mode="flat", rot=rot, pivot=0.5, fade_pow=0.8)
-        for k in range(5):
-            f = k / 4
-            self.emit("spark", x + dx * f, 0.9, z + dz * f, size=0.7, dur=0.3, delay=k * 0.03, col=PALE)
-        self.emit("glow", x2, 0.9, z2, size=2.0, dur=0.3, col=BRONZE)
-
-    def fx_rope_up(self, kind, ev):
-        for key in (("x", "z"), ("x2", "z2")):
-            x, z = ev[key[0]], ev[key[1]]
-            self.emit("ring", x, 0.12, z, size=0.5, size_to=1.8, dur=0.45, col=BRONZE, mode="flat")
-            self.burst("spark", x, 0.8, z, 4, 2.0, 0.3, 0.4, PALE, up=2.0, grav=-6)
-
-    def fx_anchor_set(self, kind, ev):                        # 줄 말뚝 박기
-        x, z = ev["x"], ev["z"]
-        self.emit("ring", x, 0.12, z, size=0.5, size_to=1.8, dur=0.45, col=BRONZE, mode="flat")
-        self.emit("dust", x, 0.3, z, size=0.8, size_to=1.6, dur=0.5, col=EARTH, alpha=0.6, add=False)
-        self.burst("shard", x, 0.3, z, 4, 1.6, 0.3, 0.5, EARTH, up=3.0, grav=-14, spin=8, add=False)
-
-    def fx_anchor_break(self, kind, ev):
-        x, z = ev["x"], ev["z"]
-        self.burst("shard", x, 0.4, z, 8, 3.0, 0.4, 0.6, EARTH, up=4.0, grav=-16, spin=9, add=False)
-        self.emit("dust", x, 0.3, z, size=1.0, size_to=2.2, dur=0.5, col=EARTH, alpha=0.6, add=False)
-        self.emit("spark", x, 0.8, z, size=1.4, dur=0.25, col=PALE)
-
-    # ---- 사냥꾼 (아린) --------------------------------------------------
-    def fx_trap_set(self, kind, ev):
-        x, z = ev["x"], ev["z"]
-        self.emit("ring", x, 0.1, z, size=0.4, size_to=1.4, dur=0.4, col=BRONZE, mode="flat")
-        self.emit("dust", x, 0.2, z, size=0.7, size_to=1.4, dur=0.5, col=EARTH, alpha=0.5, add=False)
-
-    def fx_trap_snap(self, kind, ev):                         # 사냥 덫: 이빨이 튀어 오른다
-        x, z = ev["x"], ev["z"]
-        for i in range(8):
-            a = i / 8 * math.tau
-            self.emit("thorn", x + math.cos(a) * 0.7, 0.9, z + math.sin(a) * 0.7, size=(0.45, 1.5), dur=0.5,
-                      col=(0.9, 0.9, 0.95), add=False, fade_pow=2.5, fade_in=0.01, rot=-math.sin(a) * 0.5 + 0.0)
-        self.emit("crack", x, 0.06, z, size=3.0, dur=0.7, col=(1.0, 0.6, 0.35), mode="flat")
-        self.emit("spark", x, 0.8, z, size=2.4, dur=0.25, col=PALE)
-        self.shock(x, z, 1.8, (1.0, 0.6, 0.3), 0.4)
-
-    def fx_pierce(self, kind, ev):                            # 기본 공격 관통: 화살 궤적
-        x, z, x2, z2 = ev["x"], ev["z"], ev["x2"], ev["z2"]
-        dx, dz = x2 - x, z2 - z
-        ln = math.hypot(dx, dz) or 1.0
-        self.emit("streak", x, 1.0, z, size=(0.5, ln), dur=0.25, col=STEEL, mode="flat", rot=math.atan2(dx, dz) + math.pi,
-                  pivot=-0.5)
-
-    # ---- 성직자 (엘리아) ------------------------------------------------
+    # ---- 소환사 주문 (회복·정화) ------------------------------------------
     def fx_heal(self, kind, ev):                              # 치유의 빛: 십자가가 피어오른다
         x, z = ev["x"], ev["z"]
         self.emit("glow", x, 1.0, z, size=3.0, dur=0.7, col=HOLY, fade_in=0.15)
@@ -608,41 +390,13 @@ class Vfx:
         self.emit("glow", x, 1.0, z, size=2.4, dur=0.5, col=PALE)
         self.burst("feather", x, 1.4, z, 3, 1.0, 0.45, 1.0, PALE, up=0.5, grav=-1.5, spin=2)
 
-    def fx_holy(self, kind, ev):                              # 불멸의 기도: 천사의 날개와 빛기둥
-        x, z, r = ev["x"], ev["z"], ev.get("r", 7.0)
-        self.emit("rune", x, 0.08, z, size=r * 2.0, dur=1.2, col=HOLY, mode="flat", spin=-0.8, fade_pow=0.9)
-        self.emit("wings", x, 2.3, z, size=(6.0, 6.0), size_to=(7.0, 7.0), dur=1.0, col=HOLY, fade_in=0.15)
-        self.pillar(x, z, HOLY, 12.0, 2.4, 1.0)
-        self.shock(x, z, r * 0.9, HOLY, 0.9)
-        self.emit("glow", x, 1.2, z, size=5.0, dur=0.8, col=HOLY)
-        for i in range(10):
-            a = i / 10 * math.tau
-            self.emit("cross", x, 1.2, z, size=0.6, dur=1.0, col=HOLY, vel=(math.cos(a) * r * 0.7, 1.2, math.sin(a) * r * 0.7),
-                      fade_pow=0.8, delay=0.1)
-
     def fx_zone_start(self, kind, ev):
         x, z, r = ev["x"], ev["z"], ev.get("r", 4.0)
-        if ev.get("style") == "sanctuary":                    # 성역: 마법진이 펼쳐지며 빛줄기가 오른다
-            self.emit("rune", x, 0.08, z, size=r * 2.1, size_to=r * 2.4, dur=1.0, col=HOLY, mode="flat", spin=1.2,
-                      fade_pow=0.8, fade_in=0.1)
-            for i in range(8):
-                a = i / 8 * math.tau
-                self.pillar(x + math.cos(a) * r * 0.85, z + math.sin(a) * r * 0.85, HOLY, 5.0, 0.7, 0.7)
-            self.shock(x, z, r, HOLY, 0.6)
-        elif ev.get("style") == "web":                        # 독 거미줄 둥지: 거미줄이 쫙 펼쳐지고 독 방울이 오른다
+        if ev.get("style") == "web":                        # 독 거미줄 둥지: 거미줄이 쫙 펼쳐지고 독 방울이 오른다
             self.emit("web", x, 0.09, z, size=r * 1.2, size_to=r * 2.2, dur=0.9, col=CREAM, mode="flat", fade_pow=1.4)
             self.emit("glow", x, 0.1, z, size=r * 2.2, dur=0.5, col=VENOM, mode="flat")
             self.shock(x, z, r, VENOM, 0.7)
             self.dust_ring(x, z, min(r * 0.45, 1.8), 8, col=(0.8, 0.85, 0.7))     # 먼지 덩어리가 너무 크면 바닥에 잘려 네모로 보인다
-        else:                                                 # 대자연의 정원: 꽃잎과 잎이 피어난다
-            self.shock(x, z, r, LEAF, 0.7)
-            self.emit("glow", x, 0.1, z, size=r * 2.2, dur=0.5, col=LEAF, mode="flat")
-            for i in range(16):
-                a = rr(0, math.tau)
-                d = r * rr(0.1, 0.9)
-                self.emit("petal" if i % 2 else "leaf", x + math.cos(a) * d, 0.2, z + math.sin(a) * d, size=rr(0.4, 0.7),
-                          dur=rr(1.0, 1.5), col=PETAL if i % 2 else LEAF, vel=(rr(-1, 1), rr(2.5, 4.5), rr(-1, 1)), grav=-3.5,
-                          rot=rr(0, 6), spin=rr(-4, 4), fade_pow=0.7)
 
     # ---- 거미 여왕 ------------------------------------------------------
     def fx_volley(self, kind, ev):                            # 독침 탄막: 배끝에서 독침이 부채꼴로 튀어나간다
@@ -1004,54 +758,6 @@ class Vfx:
                     self.emit("ember", px - uz * side, 0.3, pz + ux * side, size=0.3, size_to=0.05, dur=0.9, delay=tt + 0.35, col=LAVA_HOT,
                               vel=(rr(-1, 1), rr(1.5, 4), rr(-1, 1)), grav=-4)
 
-    # ---- 드루이드 (로웬) ------------------------------------------------
-    def fx_vine(self, kind, ev):                              # 가시 덩굴: 땅에서 가시 덩굴이 줄지어 솟는다
-        x, z, x2, z2 = ev["x"], ev["z"], ev["x2"], ev["z2"]
-        dx, dz = x2 - x, z2 - z
-        ln = math.hypot(dx, dz) or 1.0
-        w = ev.get("w", 1.3)
-        n = max(4, int(ln / 0.9))
-        self.emit("rope", x, 0.15, z, size=(w * 0.7, ln), dur=0.7, col=(0.3, 0.75, 0.25), mode="flat",
-                  rot=math.atan2(dx, dz), pivot=0.5, fade_pow=1.2, alpha=0.8)
-        for i in range(n):
-            f = (i + 0.5) / n
-            px, pz = x + dx * f, z + dz * f
-            side = 1 if i % 2 else -1
-            self.emit("thorn", px + side * w * 0.25, 0.8, pz, size=(0.55 * w, 1.7 * w), dur=0.55, delay=f * 0.18,
-                      col=LEAF, add=False, rot=side * 0.35, fade_pow=2.0, fade_in=0.05)
-            if i % 2 == 0:
-                self.emit("leaf", px - side * w * 0.3, 0.5, pz, size=0.5, dur=0.6, delay=f * 0.18, col=LEAF,
-                          vel=(side * 0.8, 1.5, 0), grav=-3.0, rot=rr(0, 6), spin=rr(-4, 4), fade_pow=0.8)
-        self.burst("spark", x2, 0.8, z2, 5, 2.5, 0.3, 0.4, (0.7, 1.0, 0.5), up=1.5)
-
-    def fx_shield(self, kind, ev):                            # 꽃잎 보호막: 꽃잎이 몸을 돈다
-        x, z = ev["x"], ev["z"]
-        for i in range(8):
-            a = i / 8 * math.tau
-            self.emit("petal", x, 0.4, z, size=(0.5, 0.8), dur=1.1, delay=i * 0.03, col=PETAL,
-                      orbit=(x, z, 1.4, 1.0, a, 4.5, 0.9), rot=a, spin=2.0, fade_pow=0.9)
-        self.emit("glow", x, 1.0, z, size=2.6, dur=0.6, col=PETAL)
-        self.emit("hex", x, 1.1, z, size=2.5, dur=0.7, col=PETAL, alpha=0.6)
-
-    def fx_wind(self, kind, ev):                              # 바람의 축복: 바람 소용돌이와 잎
-        x, z = ev["x"], ev["z"]
-        self.emit("swirl", x, 0.12, z, size=3.0, size_to=1.6, dur=0.9, col=(0.7, 1.0, 0.85), mode="flat", spin=-8.0)
-        for i in range(8):
-            a = i / 8 * math.tau
-            self.emit("leaf", x, 0.2, z, size=0.45, dur=1.0, delay=i * 0.04, col=LEAF,
-                      orbit=(x, z, 1.3, 0.5, a, 7.0, 2.2), rot=a, spin=4.0, fade_pow=0.8)
-        self.emit("glow", x, 1.0, z, size=2.0, dur=0.5, col=(0.7, 1.0, 0.85))
-
-    def fx_petal_burst(self, kind, ev):                       # 보호막이 깨지며 꽃잎이 터진다
-        x, z, r = ev["x"], ev["z"], ev.get("r", 3.0)
-        self.shock(x, z, r, PETAL, 0.5)
-        for i in range(16):
-            a = i / 16 * math.tau + rr(-0.1, 0.1)
-            sp = r * rr(1.4, 2.4)
-            self.emit("petal", x, 1.0, z, size=(0.5, 0.8), dur=0.8, col=PETAL, vel=(math.cos(a) * sp, rr(0.5, 2.5), math.sin(a) * sp),
-                      grav=-3.0, rot=a, spin=rr(-6, 6), fade_pow=0.8)
-        self.emit("glow", x, 1.0, z, size=r * 1.6, dur=0.3, col=PETAL)
-
     # ---- 그 밖의 효과 ----------------------------------------------------
     def fx_wallhit(self, kind, ev):
         x, z = ev["x"], ev["z"]
@@ -1108,33 +814,7 @@ class Vfx:
         """스킬을 쓰는 순간 시전자에게 붙는 이펙트. champ: 챔피언 id."""
         rot = facing_to_rot(facing)
         fx_, fz_ = math.sin(rot), math.cos(rot)
-        if champ == "hunter" and slot == "Q":                 # 연속 사격: 황금빛 화살 고리가 몸을 돈다
-            for i in range(6):
-                a = i / 6 * math.tau
-                self.emit("chevron", x, 0.9, z, size=0.6, dur=1.0, delay=i * 0.03, col=GOLD,
-                          orbit=(x, z, 1.1, 1.1, a, 7.0, 0.0), rot=a, spin=0.0, fade_pow=0.8, mode="bill")
-            self.emit("ring", x, 0.1, z, size=1.0, size_to=2.4, dur=0.5, col=GOLD, mode="flat")
-            self.emit("glow", x, 1.0, z, size=2.4, dur=0.5, col=GOLD)
-        elif champ == "hunter" and slot == "E":               # 구르기: 먼지와 바람 자국
-            self.emit("streak", x, 0.2, z, size=(0.9, 4.0), dur=0.4, col=PALE, mode="flat", rot=rot + math.pi, pivot=-0.5,
-                      alpha=0.7)
-            self.emit("dust", x, 0.3, z, size=1.0, size_to=2.0, dur=0.6, col=(0.8, 0.78, 0.72), alpha=0.6, add=False)
-        elif champ == "hunter" and slot == "R":               # 관통 화살: 화살에 힘이 모인다
-            self.emit("glow", x + fx_ * 0.8, 1.2, z + fz_ * 0.8, size=2.4, dur=0.3, col=GOLD)
-            self.emit("ring", x, 0.1, z, size=2.2, size_to=0.8, dur=0.35, col=GOLD, mode="flat")
-            self.emit("streak", x, 1.0, z, size=(0.7, 5.0), dur=0.25, col=GOLD, mode="flat", rot=rot, pivot=0.5)
-        elif champ == "reaper" and slot == "R":               # 영혼 속박: 사슬 던지기
-            self.emit("glow", x + fx_ * 0.8, 1.2, z + fz_ * 0.8, size=2.2, dur=0.3, col=SOUL)
-            self.emit("ring", x, 0.1, z, size=1.0, size_to=2.4, dur=0.4, col=SOUL, mode="flat")
-        elif champ == "acrobat" and slot == "Q":              # 외줄 걸기: 갈고리를 던진다
-            self.emit("spark", x + fx_ * 0.8, 1.2, z + fz_ * 0.8, size=1.4, dur=0.25, col=BRONZE)
-        elif champ == "acrobat" and slot == "E":              # 줄 말뚝
-            self.emit("ring", x, 0.1, z, size=0.8, size_to=2.0, dur=0.4, col=BRONZE, mode="flat")
-        elif champ == "druid" and slot == "Q":                # 덩굴 소환: 손에서 녹색 빛
-            self.emit("glow", x + fx_ * 0.8, 1.2, z + fz_ * 0.8, size=1.8, dur=0.3, col=LEAF)
-        elif champ == "cleric" and slot in ("Q", "E"):        # 시전 손에 빛
-            self.emit("glow", x + fx_ * 0.7, 1.3, z + fz_ * 0.7, size=1.6, dur=0.3, col=HOLY)
-        elif champ == "spider" and slot == "W":               # 거미줄 장판: 입에서 하얀 빛이 모인다
+        if champ == "spider" and slot == "W":               # 거미줄 장판: 입에서 하얀 빛이 모인다
             self.emit("glow", x + fx_ * 0.9, 0.9, z + fz_ * 0.9, size=2.0, dur=0.3, col=CREAM)
             self.emit("web", x, 0.1, z, size=1.0, size_to=2.4, dur=0.45, col=CREAM, mode="flat", rot=rr(0, 6), fade_pow=1.2)
         elif champ == "spider" and slot == "E":               # 고치: 배 끝에서 누런 빛
@@ -1147,21 +827,13 @@ class Vfx:
             self.emit("glow", x + fx_ * 1.6, 1.8, z + fz_ * 1.6, size=1.2, size_to=2.2, dur=0.3, col=LAVA_HOT)
         elif champ == "dragon" and slot == "W":               # 회오리: 날개를 치켜들며 먼지
             self.dust_ring(x, z, 1.4, 8)
-        elif champ == "monk" and slot == "Q":                 # 타종: 휘두르는 순간 금빛 번쩍
-            self.emit("glow", x + fx_ * 0.9, 1.2, z + fz_ * 0.9, size=2.2, dur=0.25, col=GOLD)
+
 
     # ============================================================== 날아가는 투사체
     TRAIL = {
         #  종류: (꼬리 그림, 길이, 폭, 꼬리 색, 빛 색, 빛 크기, 입자 그림 (또는 None), 초당 입자 수)
         "arrow": ("streak", 2.4, 0.30, STEEL, STEEL, 0.0, "spark", 6),
         "snowball": ("streak", 1.4, 0.45, PALE, (0.7, 0.85, 1.0), 1.1, "spark", 10),
-        "knife": ("streak", 1.8, 0.28, STEEL, PALE, 0.7, "spark", 8),
-        "knife_fast": ("streak", 2.8, 0.26, STEEL, PALE, 0.8, "spark", 10),
-        "hook": ("rope", 3.2, 0.30, BRONZE, BRONZE, 0.8, "spark", 8),
-        "chain": ("streak", 1.8, 0.5, SOUL, SOUL, 1.4, "chain", 7),
-        "giant_arrow": ("streak", 8.0, 1.2, GOLD, GOLD, 2.6, "spark", 24),
-        "light_bolt": ("streak", 2.0, 0.55, HOLY, HOLY, 1.8, "cross", 12),
-        "leaf_bolt": ("streak", 1.6, 0.45, LEAF, LEAF, 1.4, "leaf", 12),
         "fire_bolt": ("streak", 1.3, 0.35, LAVA, LAVA_HOT, 1.1, "ember", 14),
         "web": ("streak", 2.2, 0.55, CREAM, CREAM, 1.3, "spark", 8),
         "web_shot": ("streak", 1.3, 0.3, CREAM, CREAM, 0.7, "spark", 3),
@@ -1192,7 +864,6 @@ class Vfx:
         try:
             dx, dz = p["dx"], p["dz"]
             rot = math.atan2(dx, dz)
-            tail = (p["style"] == "hook")
             if p["style"].startswith("turret_shot"):                    # 포탑: 구 앞쪽엔 빛 없이 뒤 경로 입자만
                 name, gsize = None, 0
             if name:
@@ -1203,16 +874,7 @@ class Vfx:
             if part:
                 for _ in range(self.rate(prate)):
                     jx, jz = rr(-0.25, 0.25), rr(-0.25, 0.25)
-                    if part == "leaf":
-                        self.emit("leaf", x + jx, y, z + jz, size=rr(0.3, 0.5), dur=0.6, col=LEAF, vel=(jx, rr(-0.5, 0.5), jz),
-                                  grav=-3.0, rot=rr(0, 6), spin=rr(-6, 6), fade_pow=0.8)
-                    elif part == "cross":
-                        self.emit("cross", x + jx, y, z + jz, size=rr(0.25, 0.45), dur=0.5, col=HOLY, vel=(jx, 0.6, jz),
-                                  rot=rr(-0.3, 0.3), fade_pow=0.8)
-                    elif part == "chain":
-                        self.emit("chain", x - dx * 0.5, y, z - dz * 0.5, size=(0.4, 0.65), dur=0.5, col=SOUL,
-                                  vel=(jx, -1.2, jz), grav=-6.0, rot=rr(0, 6), spin=rr(-8, 8), fade_pow=0.8)
-                    elif part == "ember":                         # 둥근 불씨가 뒤로 흩어진다
+                    if part == "ember":                         # 둥근 불씨가 뒤로 흩어진다
                         self.emit("glow", x + jx - dx * 0.4, y, z + jz - dz * 0.4, size=rr(0.22, 0.42), dur=0.45, col=tcol,
                                   vel=(jx * 0.5, rr(-0.2, 0.3), jz * 0.5), fade_pow=1.0)
                     else:
@@ -1227,20 +889,11 @@ class Vfx:
         """상태가 이어지는 동안 몸 주변에 흐르는 입자. 매 프레임 부른다."""
         self.ctx(ally, False)
         try:
-            if "vamp" in st:                                  # 흡혈: 핏방울이 솟는다
-                for _ in range(self.rate(10)):
-                    a = rr(0, math.tau)
-                    self.emit("drop", x + math.cos(a) * 0.5, 0.3 + lift, z + math.sin(a) * 0.5, size=(0.22, 0.32), dur=0.8,
-                              col=BLOOD, vel=(0, rr(1.2, 2.2), 0), fade_pow=0.8)
             if "ghost" in st:                                 # 망령: 영혼 불꽃
                 for _ in range(self.rate(9)):
                     a = rr(0, math.tau)
                     self.emit("glow", x + math.cos(a) * 0.5, 0.4 + lift, z + math.sin(a) * 0.5, size=rr(0.4, 0.7), dur=0.9,
                               col=GHOST, vel=(0, rr(0.8, 1.6), 0), fade_pow=0.8, alpha=0.7)
-            if "counter" in st:                               # 반격: 육각 방어막 돔
-                self.emit("hex", x, 1.1 + lift, z, size=2.6, dur=self.dt * 1.4 + 0.001, col=GOLD, fade_in=0.0, alpha=0.55)
-            if "echo" in st and _rnd.random() < self.dt * 1.6:    # 메아리: 소리 파문
-                self.emit("ring", x, 0.1, z, size=0.8, size_to=2.2, dur=0.7, col=SOUND, mode="flat", fade_pow=1.2, alpha=0.7)
             if "ignite" in st:                                # 점화: 불꽃
                 for _ in range(self.rate(10)):
                     a = rr(0, math.tau)
@@ -1249,11 +902,6 @@ class Vfx:
             if "exhaust" in st and _rnd.random() < self.dt * 3.0:     # 탈진: 늘어지는 보랏빛 방울
                 self.emit("drop", x + rr(-0.4, 0.4), 2.1 + lift, z + rr(-0.4, 0.4), size=(0.22, 0.32), dur=0.8, col=SOUL,
                           vel=(0, -1.6, 0), fade_pow=0.8)
-            if "marked" in st:                                # 울림 표식: 머리 위 종
-                self.emit("bell", x, 2.7 + lift, z, size=(0.7, 0.7), dur=self.dt * 1.4 + 0.001, col=GOLD, fade_in=0.0)
-            if "undying" in st:                               # 불사: 머리 위 빛 고리
-                self.emit("ring", x, 2.6 + lift, z, size=1.1, dur=self.dt * 1.4 + 0.001, col=HOLY, mode="flat", fade_in=0.0)
-                self.emit("glow", x, 1.1 + lift, z, size=2.4, dur=self.dt * 1.4 + 0.001, col=HOLY, fade_in=0.0, alpha=0.5)
             if is_shield:                                     # 보호막: 도는 꽃잎 / 반짝이는 막
                 if _rnd.random() < self.dt * 5.0:
                     a = rr(0, math.tau)
