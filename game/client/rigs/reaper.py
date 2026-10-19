@@ -28,23 +28,22 @@ _SCALE = _S(SC)
 
 WAIST_Y = 1.15                  # 떠 있는 허리 높이
 CHEST_UP = 0.42                 # 허리 -> 가슴
-SHOULDER = (0.36, 0.12)         # 가슴 기준 어깨 (좌우, 높이)
+SHOULDER = (0.39, 0.07)         # 가슴 기준 어깨 (좌우, 높이)
 HEAD_AT = (0.0, 0.46, 0.04)     # 가슴 기준 머리
-UPPER, FORE = 0.42, 0.44        # 위팔 / 아래팔 길이
+UPPER, FORE = 0.44, 0.46        # 위팔 / 아래팔 길이
 
 # 낫 (낫 좌표: 아래쪽 손잡이가 원점, +Y 가 자루 끝, +Z 가 날이 뻗는 쪽)
 BUTT, TOP = -0.75, 1.65
 BLADE_LEN = 1.3
-GRIP2 = 0.55                    # 왼손이 쥐는 자리 (오른손은 원점)
+GRIP2 = 0.5                     # 왼손이 쥐는 자리 (오른손은 원점). 팔이 닿지 않으면 왼손은 놓는다
 
 CLOTH_TOP = (0.21, 0.18, 0.28)
 CLOTH_HEM = (0.36, 0.28, 0.5)
-INNER = (0.03, 0.02, 0.05)
 BONE = (0.9, 0.87, 0.78)
 SHAFT = (0.24, 0.17, 0.15)
 METAL = (0.55, 0.5, 0.62)
 BLADE = (0.8, 0.84, 0.92)
-SOUL = (0.55, 0.95, 1.0)        # 눈·날의 영혼 빛
+SOUL = (0.55, 0.95, 1.0)        # 날끝의 영혼 빛
 
 H = 1 / 50                      # 천 시뮬레이션 한 걸음 (초)
 MAX_STEPS = 5
@@ -79,7 +78,7 @@ def _mix(p, q, k):
     return _pose(_lerp(p[0], q[0], k), _lerp(p[1], q[1], k), _lerp(p[2], q[2], k))
 
 
-def sweep_pose(theta, phi, rad=0.28, y=1.35):
+def sweep_pose(theta, phi, rad=0.46, y=1.38):
     """몸 둘레로 수평에 가깝게 휘두르는 자세. theta: 자루가 뻗는 방향(0 = 앞, + = 오른쪽), phi: 들린 각도.
     날은 theta 가 줄어드는 쪽(오른쪽 -> 왼쪽으로 휘두를 때 나아가는 쪽)을 향한다."""
     st, ct = math.sin(theta), math.cos(theta)
@@ -90,11 +89,11 @@ def sweep_pose(theta, phi, rad=0.28, y=1.35):
 def chop_pose(alpha, y=1.55):
     """몸 앞 세로로 내려치는 자세. alpha: 자루가 앞 수평에서 아래로 기운 각도 (음수면 위로, -pi/2 면 수직)."""
     sa, ca = math.sin(alpha), math.cos(alpha)
-    return _pose((0.2, y, 0.18), (0.22, -sa, ca), (0.0, -ca, -sa))
+    return _pose((0.24, y, 0.36), (0.22, -sa, ca), (0.0, -ca, -sa))
 
 
-IDLE_POSE = _pose((0.26, 1.02, 0.36), (0.12, 1.0, 0.08), (-0.35, 0.0, 1.0))
-MOVE_POSE = _pose((0.3, 1.18, 0.1), (0.25, 0.5, -0.85), (-0.2, 0.9, 0.4))
+IDLE_POSE = _pose((0.2, 1.02, 0.5), (0.25, 1.0, 0.05), (-0.35, 0.0, 1.0))
+MOVE_POSE = _pose((0.42, 1.12, 0.2), (0.15, 0.55, -0.82), (-0.2, 0.9, 0.4))
 RECALL_POSE = _pose((0.32, 0.95, 0.32), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
 WIN_POSE = _pose((0.28, 1.72, 0.25), (0.15, 1.0, 0.2), (-0.3, 0.0, 1.0))
 STUN_POSE = _pose((0.2, 0.85, 0.4), (0.3, 0.55, 0.75), (-1.0, 0.0, 0.2))
@@ -102,33 +101,47 @@ DEAD_POSE = _pose((0.5, 0.06, -0.9), (-0.2, 0.0, 1.0), (1.0, 0.0, 0.0))
 
 
 # ------------------------------------------------------------------ 메시
-def _sleeve(r0, r1, color, seg=10):
+def _sleeve(r0, r1, color, seg=14):
     """반지름 1 기준 원통 (아래 r0 -> 위 r1, 높이 1, +Y). 그릴 때 두께·길이로 늘린다."""
     b = MeshBuilder()
     b.cylinder((0, 0, 0), r0, 1.0, color, seg, radius_top=r1)
     return b
 
 
-def _shell(radius, scale, color, cut_z, seg=18, rings=12):
-    """앞(+Z)이 뚫린 구 껍질 (두건). 법선 z 가 cut_z 보다 큰 쪽 삼각형을 뺀다."""
+def _loft(rings, color, seg=22, cut=None):
+    """아래에서 위로 쌓은 타원 단면들을 매끈하게 이은 면. rings: (높이, 좌우 반지름, 앞뒤 반지름, 앞뒤 치우침[, 앞쪽만 더 내밈]).
+    단면 각도 0 이 앞(+Z). cut(높이, 각도) 가 참인 칸은 비운다 (두건의 얼굴 구멍)."""
+    P = np.zeros((len(rings), seg + 1, 3))
+    for j, rg in enumerate(rings):
+        y, rx, rz, cz = rg[:4]
+        fr = rg[4] if len(rg) > 4 else 0.0
+        for i in range(seg + 1):
+            a = 2 * PI * i / seg
+            c = math.cos(a)
+            P[j, i] = (math.sin(a) * rx, y, c * rz + cz + fr * max(0.0, c) ** 2)
+    du = np.roll(P, -1, axis=1) - np.roll(P, 1, axis=1)
+    du[:, 0] = du[:, -1] = P[:, 1] - P[:, -2]
+    dv = np.zeros_like(P)
+    dv[1:-1] = P[2:] - P[:-2]
+    dv[0], dv[-1] = P[1] - P[0], P[-1] - P[-2]
+    N = np.cross(du, dv)
+    N /= np.maximum(np.linalg.norm(N, axis=2, keepdims=True), 1e-9)
     b = MeshBuilder()
-    sx, sy, sz = scale
-
-    def pt(i, j):
-        th = PI * j / rings
-        ph = 2 * PI * i / seg
-        n = (math.sin(th) * math.sin(ph), math.cos(th), math.sin(th) * math.cos(ph))
-        return (n[0] * radius * sx, n[1] * radius * sy, n[2] * radius * sz), n
-
-    for j in range(rings):
+    for j in range(len(rings) - 1):
         for i in range(seg):
-            (a, na), (c, nc) = pt(i, j), pt(i + 1, j)
-            (d, nd), (e, ne) = pt(i + 1, j + 1), pt(i, j + 1)
-            if (na[2] + nc[2] + nd[2] + ne[2]) / 4 > cut_z:
+            if cut and cut((rings[j][0] + rings[j + 1][0]) / 2, 2 * PI * (i + 0.5) / seg):
                 continue
-            b.tri(a, e, d, color, na, ne, nd)
-            b.tri(a, d, c, color, na, nd, nc)
+            q = [(j, i), (j, i + 1), (j + 1, i + 1), (j + 1, i)]
+            pts = [tuple(P[a, c]) for a, c in q]
+            ns = [tuple(N[a, c]) for a, c in q]
+            b.tri(pts[0], pts[1], pts[2], color, ns[0], ns[1], ns[2])
+            b.tri(pts[0], pts[2], pts[3], color, ns[0], ns[2], ns[3])
     return b
+
+
+def _face_hole(y, a):
+    a = (a + PI) % (2 * PI) - PI
+    return abs(a) < math.radians(52) and -0.17 < y < 0.19
 
 
 def _blade_curve(n=16):
@@ -185,33 +198,24 @@ def build_scythe_projectile():
 class ReaperAssets:
     def __init__(self, renderer):
         mk = lambda b: Mesh.from_builder(renderer, b)
-        torso, chest, hood, inner, skull, sockets, eyes = (MeshBuilder() for _ in range(7))
-        # 몸통 (허리 좌표): 허리에서 가슴까지 넓어지는 원통
-        torso.cylinder((0, -0.12, 0), 0.25, 0.6, CLOTH_TOP, 14, radius_top=0.33)
-        # 가슴 (가슴 좌표): 어깨 덩어리 + 목깃
-        _xf(chest, _sphere(1.0, CLOTH_TOP, (0.43, 0.2, 0.28), 16, 10), _T(0, 0.07, -0.02))
-        chest.cylinder((0, 0.12, -0.01), 0.2, 0.14, INNER, 12, radius_top=0.17)
+        # 아랫몸 (허리 좌표): 로브 윗단 속으로 이어지는 허리
+        torso = _loft([(-0.15, 0.25, 0.21, 0.0), (0.1, 0.27, 0.215, 0.0), (0.32, 0.3, 0.225, 0.0)], CLOTH_TOP)
+        # 윗몸 (가슴 좌표): 가슴 -> 둥글게 처진 어깨 -> 목 (어깨 끝에서 팔이 나온다)
+        chest = _loft([(-0.34, 0.29, 0.22, 0.0), (-0.14, 0.32, 0.235, 0.0), (0.0, 0.35, 0.24, -0.01),
+                       (0.07, 0.38, 0.23, -0.02), (0.13, 0.33, 0.21, -0.02), (0.18, 0.23, 0.17, -0.01),
+                       (0.23, 0.13, 0.12, 0.0)], CLOTH_TOP)
         for sx in (-1, 1):
-            _xf(chest, _sphere(0.13, CLOTH_TOP, (1, 0.9, 1), 10, 8), _T(sx * SHOULDER[0], SHOULDER[1], 0))
-        # 두건 (머리 좌표): 앞이 뚫린 껍질 + 어두운 안쪽 + 뒤로 처진 뾰족한 끝
-        hood.verts += _shell(0.3, (0.92, 1.0, 1.02), CLOTH_TOP, 0.52).verts
-        tip = MeshBuilder()
-        tip.cylinder((0, 0, 0), 0.13, 0.32, CLOTH_TOP, 10, radius_top=0.0)
-        _xf(hood, tip, _T(0, 0.12, -0.18) @ _Rx(-2.2))
-        inner.verts += _shell(0.27, (0.9, 0.98, 1.0), INNER, 0.8).verts
-        # 해골
-        _xf(skull, _sphere(0.15, BONE, (0.9, 1.0, 1.05), 14, 10), _T(0, 0.02, 0.07))
-        jaw = MeshBuilder()
-        jaw.box((0, -0.115, 0.12), (0.15, 0.06, 0.11), BONE, taper=0.85)
-        skull.verts += jaw.verts
-        for sx in (-1, 1):
-            _xf(sockets, _sphere(0.046, INNER, seg=8, rings=6), _T(sx * 0.056, 0.025, 0.19))
-            _xf(eyes, _sphere(0.03, (1, 1, 1), seg=8, rings=6), _T(sx * 0.056, 0.025, 0.222))
-        _xf(sockets, _sphere(0.022, INNER, (1.0, 1.3, 1.0), 6, 5), _T(0, -0.045, 0.21))      # 콧구멍
+            _xf(chest, _sphere(0.1, CLOTH_TOP, (1.0, 0.95, 1.0), 12, 8), _T(sx * SHOULDER[0], SHOULDER[1], 0))
+        # 두건 (머리 좌표): 어깨에 걸친 자락에서 뒤로 뾰족하게 접힌 꼭대기까지, 앞은 얼굴 자리가 뚫렸고 안은 새까맣다
+        hood = _loft([(-0.31, 0.31, 0.27, -0.03), (-0.2, 0.25, 0.25, 0.0, 0.03), (-0.06, 0.215, 0.235, 0.0, 0.05),
+                      (0.08, 0.205, 0.23, -0.01, 0.06), (0.19, 0.175, 0.2, -0.04, 0.04), (0.27, 0.12, 0.15, -0.09),
+                      (0.33, 0.06, 0.08, -0.15), (0.36, 0.0, 0.0, -0.21)], CLOTH_TOP, cut=_face_hole)
+        inner = MeshBuilder()
+        inner.sphere((0, 0.0, 0.0), 0.2, (0, 0, 0), 14, 10, (0.95, 1.0, 1.0))
         self.torso, self.chest, self.hood, self.inner = mk(torso), mk(chest), mk(hood), mk(inner)
-        self.skull, self.sockets, self.eyes = mk(skull), mk(sockets), mk(eyes)
-        self.upper = mk(_sleeve(1.0, 1.1, CLOTH_TOP))
-        self.fore = mk(_sleeve(1.05, 1.6, CLOTH_TOP))
+        self.upper = mk(_sleeve(1.0, 0.85, CLOTH_TOP))
+        self.fore = mk(_sleeve(0.8, 1.55, CLOTH_TOP))
+        self.elbow = mk(_sphere(1.0, CLOTH_TOP, seg=10, rings=7))
         hand = MeshBuilder()
         hand.sphere((0, 0, 0), 0.065, BONE, 10, 7, (1.0, 0.8, 1.2))
         for k in range(3):                                   # 손가락 마디
@@ -466,7 +470,6 @@ class ReaperAnim:
         self.was_dead = False
         self.dead_clock = 0.0
         self.won = False
-        self.rage = False
         self.cloth = Cloth(assets.cloth_spec) if assets is not None else None
         self.mats = {}
         self.arms = []
@@ -631,8 +634,6 @@ class ReaperAnim:
             self._frames()
             if self.cloth:
                 self.cloth.reset(self._cloth_mats())
-        mh = d.get("mhp") or 0
-        self.rage = bool(mh) and d.get("hp", mh) / mh < 0.35
         if d.get("a", 0) == 2 and self.t - self.last_attack > 0.55 and not self.act:
             self.attack()
         act = self._action()
@@ -711,16 +712,23 @@ class ReaperAnim:
         self.mats = {"root": root, "body": M_body, "chest": M_chest, "head": M_head, "scythe": M_scy, "sink": sink}
         # 팔: 어깨에서 낫의 손잡이(또는 빈손 자리)로 2본 IK
         holding = self.t >= self.away_until
+        shoulders = [(M_chest @ np.array([side * SHOULDER[0], SHOULDER[1], 0.0, 1.0]))[:3] for side in (1, -1)]
+        sway = 0.04 * math.sin(self.t * 2.2)
+        free_l = (M_hold @ np.array([-0.5, 1.12 + sway, 0.3, 1.0]))[:3]          # 빈 왼손: 몸 옆으로 살짝 띄워 늘어뜨린다
         if holding:
             hands = [(M_scy @ np.array([0.0, 0.0, 0.0, 1.0]))[:3], (M_scy @ np.array([0.0, GRIP2, 0.0, 1.0]))[:3]]
+            # 크게 휘두르느라 왼팔이 자루에 닿지 않으면 왼손은 놓고 몸 옆으로 (늘어나거나 몸을 뚫지 않게)
+            far = float(np.linalg.norm(hands[1] - shoulders[1])) - (UPPER + FORE) * 0.97
+            w = _smooth(1.0 - far / 0.12)
+            self.two = w if not hasattr(self, "two") else self.two + (w - self.two) * 0.35
+            hands[1] = free_l + (hands[1] - free_l) * self.two
         else:
             reach = 0.4 if (self.act and self.act[0] == "W") else 0.0
-            hands = [(M_hold @ np.array([0.32, 1.25 + reach * 0.4, 0.42 + reach, 1.0]))[:3],
-                     (M_hold @ np.array([-0.3, 1.2 + reach * 0.3, 0.38 + reach * 0.8, 1.0]))[:3]]
+            hands = [(M_hold @ np.array([0.45, 1.25 + reach * 0.4, 0.45 + reach, 1.0]))[:3],
+                     (M_hold @ np.array([-0.45, 1.2 + reach * 0.3, 0.42 + reach * 0.8, 1.0]))[:3]]
         self.arms = []
-        for side, hand in zip((1, -1), hands):
-            sh = (M_chest @ np.array([side * SHOULDER[0], SHOULDER[1], 0.0, 1.0]))[:3]
-            pole = (root[:3, :3] @ np.array([side * 0.8, -0.6, -0.5]))
+        for side, sh, hand in zip((1, -1), shoulders, hands):
+            pole = (root[:3, :3] @ np.array([side * 1.0, -0.45, -0.35]))      # 팔꿈치는 바깥 뒤로
             elbow, end = _two_bone(sh, hand, pole)
             self.arms.append((sh, elbow, hand))
 
@@ -769,15 +777,12 @@ class ReaperAnim:
             r.draw(a.chest, _SCALE @ m["chest"] @ shrink, tint=col, emissive=e)
             Mh = _SCALE @ m["head"] @ shrink
             r.draw(a.hood, Mh, tint=col, emissive=e)
-            r.draw(a.inner, Mh, tint=col)
-            r.draw(a.skull, Mh, tint=col, emissive=e)
-            r.draw(a.sockets, Mh, tint=col)
-            ec = self._eye_color()
-            r.draw(a.eyes, Mh, tint=(ec[0], ec[1], ec[2], alpha), unlit=1.0)
+            r.draw(a.inner, Mh, tint=(0, 0, 0, alpha), unlit=1.0)
             for sh, el, hd in self.arms:
                 c0 = m["body"][:3, 3]
                 sh_, el_, hd_ = (c0 + (p - c0) * sink for p in (sh, el, hd))
                 r.draw(a.upper, _SCALE @ _seg(sh_, el_, 0.1 * sink), tint=col, emissive=e)
+                r.draw(a.elbow, _SCALE @ _T(*el_) @ _S(0.088 * sink), tint=col, emissive=e)
                 r.draw(a.fore, _SCALE @ _seg(el_, hd_, 0.1 * sink), tint=col, emissive=e)
                 r.draw(a.hand, _SCALE @ _T(*hd_) @ _S(sink), tint=col, emissive=e)
         prog["u_dbl"].value = False
@@ -785,19 +790,15 @@ class ReaperAnim:
             M = _SCALE @ m["scythe"]
             r.draw(a.shaft, M, tint=col, emissive=e)
             r.draw(a.blade, M, tint=col, emissive=(e[0] + 0.05, e[1] + 0.06, e[2] + 0.1))
-            ec = self._eye_color(edge=True)
+            ec = self._edge_color()
             r.draw(a.edge, M, tint=(ec[0], ec[1], ec[2], alpha), unlit=1.0)
 
-    def _eye_color(self, edge=False):
-        t = self.t
+    def _edge_color(self):
+        """날끝 빛: 천천히 숨 쉬듯 밝아졌다 어두워지고, 죽으면 꺼진다."""
         if self.was_dead:
             k = max(0.0, 1.0 - self.dead_clock / 0.6)
         else:
-            k = 1.15 + 0.35 * math.sin(t * (11 if self.rage else 3.0))
-        if edge:
-            k *= 0.8 + 0.2 * math.sin(t * 5.0 + 1.0)
-        if self.rage and not edge:
-            return (1.0 * k, 0.3 * k, 0.35 * k)
+            k = (1.15 + 0.35 * math.sin(self.t * 3.0)) * (0.8 + 0.2 * math.sin(self.t * 5.0 + 1.0))
         return (SOUL[0] * k, SOUL[1] * k, SOUL[2] * k)
 
 
