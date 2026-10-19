@@ -4,6 +4,7 @@
     "spider"  - 동굴 여왕 거미 (보스러시 DEEP NEST 의 1층 보스를 이식)
     "serpent" - 심연의 이무기 (같은 곳의 2층 보스를 이식: 길을 따라오는 긴 몸 + 코브라 목 + 땅속 잠행)
     "dragon"  - 겁화의 용 (같은 곳의 3층 보스를 이식: 네 다리로 걷는 몸 + 접었다 펴는 날개 + 긴 목)
+    "reaper"  - 망령 사신 (떠 있는 해골 + 두 팔 IK 로 쥔 큰 낫 + 천 시뮬레이션으로 흩날리는 로브·망토·소매)
 """
 
 CHAMP_SCALE = 0.8       # 인게임 챔피언 모델 크기 배율
@@ -29,4 +30,9 @@ def make_rig(name, renderer, cache):
         if "dragon" not in cache:
             cache["dragon"] = DragonAssets(renderer)
         return DragonAnim(cache["dragon"])
+    if name == "reaper":
+        from .reaper import ReaperAnim, ReaperAssets
+        if "reaper" not in cache:
+            cache["reaper"] = ReaperAssets(renderer)
+        return ReaperAnim(cache["reaper"])
     return None

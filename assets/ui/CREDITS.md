@@ -25,6 +25,10 @@
 | 용 | W | 날개 돌풍 | [wind-slap](https://game-icons.net/1x1/lorc/wind-slap.html) — Lorc |
 | 용 | E | 날개 후려치기 | [bat-wing](https://game-icons.net/1x1/lorc/bat-wing.html) — Lorc |
 | 용 | R | 유성우 | [burning-meteor](https://game-icons.net/1x1/lorc/burning-meteor.html) — Lorc |
+| 망령 사신 | Q | 영혼 베기 | [serrated-slash](https://game-icons.net/1x1/lorc/serrated-slash.html) — Lorc |
+| 망령 사신 | W | 낫 던지기 | [boomerang-sun](https://game-icons.net/1x1/lorc/boomerang-sun.html) — Lorc |
+| 망령 사신 | E | 망령 걸음 | [haunting](https://game-icons.net/1x1/lorc/haunting.html) — Lorc |
+| 망령 사신 | R | 사형 선고 | [grim-reaper](https://game-icons.net/1x1/lorc/grim-reaper.html) — Lorc |
 
 ## 소환사 주문 (`assets/ui/spells/<이름>.png`)
 

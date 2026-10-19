@@ -43,7 +43,7 @@ BABY_ATTACK_TILT = -0.55         # 새끼 거미가 공격할 때 앞을 드는 
 MINION_RADIUS = {0: 0.45, 1: 0.4, 2: 0.6, 3: 0.75, 4: 0.34}
 MINION_HEIGHT = {0: 1.2, 1: 1.25, 2: 1.1, 3: 2.0, 4: 0.7}
 PROJ_SPEED = {"arrow": 22, "snowball": 25, "turret_shot": 16, "turret_shot_2": 16, "turret_shot_3": 16, "minion_bolt": 14, "cannon_ball": 14,
-              "web_shot": 20, "baby_shot": 20, "fire_bolt": 18, "tornado": 9}
+              "web_shot": 20, "baby_shot": 20, "fire_bolt": 18, "tornado": 9, "scythe": 17}
 # 투사체별 (높이, 발광색)
 PROJ_LOOK = {"turret_shot": (3.2, (0.3, 0.3, 0.3)), "turret_shot_2": (3.2, (0.5, 0.25, 0.1)), "turret_shot_3": (3.2, (0.7, 0.15, 0.08)), "minion_bolt": (0.8, None), "cannon_ball": (0.8, None),
              "snowball": (1.1, (0.3, 0.3, 0.3)), "web_shot": (1.0, (0.2, 0.2, 0.15)), "baby_shot": (0.8, (0.2, 0.2, 0.15)),
@@ -745,7 +745,8 @@ class GameScene(Scene):
             if ch and ch.ca and hasattr(ch.ca, "mouth") and ch.visible:
                 mx_, my_, mz_ = ch.ca.mouth()
                 ev = dict(ev, mx=mx_, my=my_, mz=mz_)
-        if kind in ("lunge", "serpent_rear", "dive", "dive_out", "sky_dive"):   # 이무기: 돌진·내려찍기 준비·잠행·솟구침 자세를 몸에 알린다
+        if kind in ("lunge", "serpent_rear", "dive", "dive_out", "sky_dive",    # 이무기: 돌진·내려찍기 준비·잠행·솟구침 자세를 몸에 알린다
+                    "reap", "scythe_throw", "scythe_catch"):                    # 사신: 내려치기 준비 시간, 낫이 손을 떠남 / 돌아옴
             ch = self.champs.get(ev.get("d"))
             if ch and ch.ca and hasattr(ch.ca, "on_fx"):
                 ch.ca.on_fx(kind, ev)
@@ -1893,6 +1894,13 @@ class GameScene(Scene):
             if p["style"] == "tornado":                           # 용의 회오리: 겹겹이 도는 반투명 원뿔대
                 self.draw_tornado(r, m, x, z, t)
                 self.vfx.projectile(p, x, 1.0, z, p["team"] == self.my_team)
+                continue
+            if p["style"] == "scythe":                            # 사신의 낫: 수평으로 빙글빙글 돌며 날아간다
+                ally = p["team"] == self.my_team
+                r.draw(m.proj["scythe"], model_matrix(x, 1.15, z, rot_y=-t * 17.0),
+                       tint=(0.85, 0.92, 1.0, 1) if ally else (1.0, 0.85, 0.85, 1),
+                       emissive=(0.05, 0.12, 0.3) if ally else (0.3, 0.06, 0.08))
+                self.vfx.projectile(p, x, 1.15, z, ally)
                 continue
             mesh = m.proj.get(p["style"], m.proj["minion_bolt"])
             y, emis = PROJ_LOOK.get(p["style"], (1.1, None))

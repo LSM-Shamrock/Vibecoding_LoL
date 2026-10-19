@@ -1,0 +1,212 @@
+{
+  "id": "reaper",
+  "name": "망령 사신",
+  "title": "영혼을 거두는 자",
+  "role": "암살자 · 근접",
+  "color": [
+    112,
+    84,
+    176
+  ],
+  "model": {
+    "rig": "reaper",
+    "scale": 1.0
+  },
+  "skill_order": [
+    "R",
+    "Q",
+    "W",
+    "E"
+  ],
+  "bot_build": [
+    "swift_boots",
+    "blood_fang",
+    "frost_edge",
+    "ice_reaper",
+    "guardian_mail"
+  ],
+  "stats": {
+    "hp": 650,
+    "hp_per_level": 106,
+    "mana": 300,
+    "mana_per_level": 38,
+    "hp_regen": 6.5,
+    "hp_regen_per_level": 0.7,
+    "mana_regen": 7.0,
+    "mana_regen_per_level": 0.7,
+    "ad": 63,
+    "ad_per_level": 3.7,
+    "armor": 32,
+    "armor_per_level": 4.4,
+    "mr": 32,
+    "mr_per_level": 1.5,
+    "attack_speed": 0.68,
+    "attack_speed_per_level": 0.028,
+    "attack_range": 2.7,
+    "move_speed": 3.6,
+    "radius": 0.6,
+    "ranged": false
+  },
+  "abilities": {
+    "Q": {
+      "name": "영혼 베기",
+      "type": "scythe_sweep",
+      "style": "reap",
+      "aim": "cone",
+      "cooldown": [
+        7.0,
+        6.5,
+        6.0,
+        5.5,
+        5.0
+      ],
+      "mana": [
+        30,
+        32,
+        34,
+        36,
+        38
+      ],
+      "range": 4.0,
+      "inner_radius": 2.4,
+      "angle": 160,
+      "delay": 0.3,
+      "damage": [
+        45,
+        75,
+        105,
+        135,
+        165
+      ],
+      "ad_ratio": 0.8,
+      "damage_type": "physical",
+      "edge_mult": 1.5,
+      "slow": 0.3,
+      "slow_duration": 1.0,
+      "heal": [
+        14,
+        20,
+        26,
+        32,
+        38
+      ],
+      "heal_ad": 0.12,
+      "desc": "낫을 크게 젖혔다가 앞쪽 반원(반경 4.0)을 휩쓸어 벱니다. 날끝(2.4 바깥)에 맞은 적은 1.5배 피해를 입고 느려지며, 그렇게 벤 적 챔피언마다 체력을 회복합니다."
+    },
+    "W": {
+      "name": "낫 던지기",
+      "type": "scythe_throw",
+      "style": "scythe",
+      "aim": "line",
+      "cooldown": [
+        11.0,
+        10.5,
+        10.0,
+        9.5,
+        9.0
+      ],
+      "mana": [
+        45,
+        48,
+        51,
+        54,
+        57
+      ],
+      "range": 8.0,
+      "width": 1.3,
+      "speed": 17.0,
+      "return_speed": 21.0,
+      "windup": 0.22,
+      "damage": [
+        55,
+        85,
+        115,
+        145,
+        175
+      ],
+      "ad_ratio": 0.55,
+      "damage_type": "physical",
+      "return_ratio": 0.6,
+      "slow": [
+        0.2,
+        0.25,
+        0.3,
+        0.35,
+        0.4
+      ],
+      "slow_duration": 1.2,
+      "desc": "낫을 회전시키며 일직선(사거리 8)으로 던집니다. 낫은 끝까지 날아간 뒤 손으로 되돌아오고, 가는 길과 오는 길에 닿은 적 모두에게 피해를 주고 느리게 합니다. 돌아올 때는 피해가 60%입니다."
+    },
+    "E": {
+      "name": "망령 걸음",
+      "type": "lunge",
+      "style": "wraith",
+      "aim": "line",
+      "untargetable": true,
+      "hit_fx": "soul_rend",
+      "cooldown": [
+        14.0,
+        13.0,
+        12.0,
+        11.0,
+        10.0
+      ],
+      "mana": [
+        40,
+        40,
+        40,
+        40,
+        40
+      ],
+      "range": 5.0,
+      "width": 1.6,
+      "speed": 24.0,
+      "windup": 0.05,
+      "damage": [
+        40,
+        65,
+        90,
+        115,
+        140
+      ],
+      "ad_ratio": 0.45,
+      "damage_type": "magic",
+      "slow": 0.25,
+      "slow_duration": 1.0,
+      "desc": "망령이 되어 일직선(5.0)으로 미끄러져 지나갑니다. 지나는 동안 대상으로 지정되지 않고, 길 위의 적은 피해를 입고 느려집니다."
+    },
+    "R": {
+      "name": "사형 선고",
+      "type": "execute",
+      "style": "reap",
+      "aim": "enemy",
+      "cooldown": [
+        90,
+        75,
+        60
+      ],
+      "mana": [
+        100,
+        100,
+        100
+      ],
+      "range": 6.0,
+      "radius": 1.8,
+      "delay": 0.8,
+      "damage": [
+        150,
+        250,
+        350
+      ],
+      "ad_ratio": 0.8,
+      "damage_type": "physical",
+      "missing_hp": [
+        0.15,
+        0.2,
+        0.25
+      ],
+      "kill_refund": 0.8,
+      "desc": "대상으로 지정한 적 챔피언(사거리 6)의 머리 위로 거대한 영혼의 낫을 불러내 0.8초 뒤 내려칩니다. 대상 둘레(반경 1.8)의 적은 피해를 입고, 잃은 체력이 많을수록 더 큰 피해를 입습니다. 이 스킬로 적 챔피언을 처치하면 재사용 대기시간의 80%가 돌아옵니다."
+    }
+  }
+}

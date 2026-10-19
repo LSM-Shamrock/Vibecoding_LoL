@@ -925,6 +925,26 @@
    "vol": 0.95,
    "gap": 0.0,
    "pri": 1
+  },
+  "atk_scythe": {
+   "files": [
+    "rpg/drawKnife1.ogg",
+    "rpg/drawKnife2.ogg",
+    "rpg/drawKnife3.ogg"
+   ],
+   "vol": 0.5,
+   "pitch": 0.05,
+   "gap": 0.1,
+   "range": 26
+  },
+  "fx_catch": {
+   "files": [
+    "rpg/metalLatch.ogg"
+   ],
+   "vol": 0.45,
+   "pitch": 0.05,
+   "gap": 0.1,
+   "range": 26
   }
  },
  "attack": {
@@ -943,6 +963,10 @@
   "dragon": {
    "swing": "cast_fire",
    "hit": "hit_soft"
+  },
+  "reaper": {
+   "swing": "atk_scythe",
+   "hit": "hit_blade"
   }
  },
  "cast": {
@@ -959,7 +983,11 @@
   "tornado": "cast_wing",
   "wing_sweep": "cast_wing",
   "sky_dive": "cast_roar",
-  "spit_pool:fire": "cast_fire"
+  "spit_pool:fire": "cast_fire",
+  "scythe_sweep": "cast_wing",
+  "scythe_throw": "cast_throw",
+  "lunge:wraith": "cast_ghost",
+  "execute": "cast_dark"
  },
  "fx": {
   "spell:heal": "cast_heal",
@@ -990,7 +1018,14 @@
   "fire_bolt_hit": "hit_soft",
   "slam:wing": "fx_sweep",
   "slam:skyfire": "fx_meteor",
-  "turret_lock": "turret_lock"
+  "turret_lock": "turret_lock",
+  "reap_sweep": "atk_scythe",
+  "reap_edge": "hit_blade",
+  "scythe_hit": "hit_blade",
+  "scythe_catch": "fx_catch",
+  "soul_rend": "hit_soft",
+  "reap_strike": "fx_trap_snap",
+  "reap_soul": "cast_ghost"
  },
  "projectile": {
   "turret_shot": "turret_shot",

@@ -318,6 +318,12 @@ class BotBrain:
             if (2.2 < dist <= ab["range"] + 0.5 and hp_ratio > 0.35 and self.dash_ok(sim, target, tx, tz)):
                 return (tx, tz)
             return None
+        if typ == "scythe_sweep":                            # 영혼 베기: 날끝(바깥쪽)에 걸리는 거리에서 휘두른다
+            return (tx, tz) if ab.get("inner_radius", 0) * 0.7 <= dist <= ab["range"] * 0.95 else None
+        if typ == "scythe_throw":                            # 낫 던지기: 사거리 안의 적에게 (돌아오는 길도 벤다)
+            return self.aim(sim, target, ab.get("speed")) if dist <= ab["range"] * 0.9 else None
+        if typ == "execute":                                 # 사형 선고: 체력이 낮은 적 챔피언에게
+            return (tx, tz) if dist <= ab["range"] and their < 0.45 else None
         if typ == "zone":                                    # 독 거미줄
             if dist <= ab["range"] and (clustered or their < 0.5):
                 return (tx, tz)

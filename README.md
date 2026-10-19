@@ -135,7 +135,7 @@ PNG 가 없으면 게임은 예전처럼 글자 아이콘으로 대신 보여 �
 
 ## 챔피언
 
-챔피언은 **거미 여왕**, **이무기**, **용** 셋입니다. 보스러시 게임(`VibeCoding_BossRush_Pygame`)의 보스 세 마리를 챔피언으로 옮겼습니다.
+챔피언은 **거미 여왕**, **이무기**, **용**, **망령 사신** 넷입니다. 앞의 셋은 보스러시 게임(`VibeCoding_BossRush_Pygame`)의 보스 세 마리를 챔피언으로 옮긴 것이고, 망령 사신은 새로 만들었습니다.
 
 ### 거미 여왕 (`spider`) — 보스러시 "동굴 여왕 거미" 이식
 
@@ -192,6 +192,25 @@ PNG 가 없으면 게임은 예전처럼 글자 아이콘으로 대신 보여 �
 
 평타는 입에서 나가는 작은 불꽃 투사체(`fire_bolt`, 사거리 4.2, `projectile_muzzle` 로 몸 앞쪽에서 출발)입니다. 서버는 `sky_dive` 이벤트로 오르는·내리꽂는 시간표를 보내고, 리그는 몸 전체를 들어 올려 기울이며 클라이언트가 불줄기를 그립니다. 연출 이벤트는 `gust_wind`·`gust`·`wing_wind`·`sky_dive`·`burn` 이고,
 불 이펙트는 팀 색을 섞지 않고 불 색 그대로 그립니다 (`Vfx.neutral()`). 효과음은 `cast_fire`, `cast_wing`, `cast_roar`, `fx_fireburst`, `fx_gust`, `fx_meteor` (`data/sounds.json`).
+
+### 망령 사신 (`reaper`)
+
+다리 없이 떠 있는 해골 사신입니다 (`game/client/rigs/reaper.py`, 리그 단위 × `SC`). 두건 속 해골, 몸통, 두 팔(어깨→낫 손잡이 2본 IK)과 두 손으로 쥔 큰 낫으로 이루어지고,
+낫 자세는 "아래 손잡이 위치 + 자루 방향 + 날 방향" 세 벡터로 정해 동작마다 곡선으로 움직입니다.
+**옷자락은 천 시뮬레이션**입니다: 로브(허리에 붙은 원통 20×8), 등 망토(두 어깨 사이 9×9), 두 소매 끝(손목 7×4)의 입자를 Verlet 으로 움직이고
+거리 제약(세로·가로·한 칸 건너 세로)으로 묶습니다. 맨 윗줄은 몸에 고정, 그 아래는 원래 모양으로 아래로 갈수록 약하게만 끌어당겨서
+몸이 움직이거나 돌면 끝자락이 늦게 따라오며 펄럭이고, 가만히 있어도 아래로 흘러내리는 흔들림과 가끔 부푸는 힘으로 흩날립니다.
+기둥마다 길이가 들쭉날쭉해 끝자락이 해진 톱니 모양입니다. 천은 매 프레임 정점을 새로 계산해 한 메시(`ReaperAssets.cloth`)에 써 넣어 그리고,
+화면 밖이라 몰아서 갱신할 때는 풀지 않고 제자리 모양으로 둡니다. 죽으면 몸이 로브 속으로 꺼지고, 고정이 풀린 천이 바닥에 무너져 내립니다.
+
+| 키 | 스킬 | 동작 |
+|---|---|---|
+| Q | 영혼 베기 | 0.3초 젖혔다가(그동안 제자리) 앞쪽 160° 부채꼴(반경 4.0)을 휩쓸기 (`scythe_sweep`). 날끝(`inner_radius` 2.4 바깥)에 맞은 적은 1.5배 피해(`edge_mult`) + 둔화, 그렇게 벤 적 챔피언마다 체력 회복(`heal`, `heal_ad`) |
+| W | 낫 던지기 | 낫을 회전시키며 직선(8)으로 던져, 끝까지 간 낫이 시전자에게 되돌아옴 (`scythe_throw`). 가는 길·오는 길에 한 번씩 피해 + 둔화 (오는 길 `return_ratio` 60%). 날아가는 동안 사신은 빈손 |
+| E | 망령 걸음 | 직선 5.0 돌진 (`lunge` + `"untargetable": true`), 지나는 동안 대상 지정 불가·반투명, 길 위의 적에게 마법 피해 + 둔화 |
+| R | 사형 선고 | 대상 지정(사거리 6): 0.8초 낫을 치켜들었다가(예고 원이 대상을 따라감) 내려침 (`execute`). 반경 1.8 에 피해 + 잃은 체력 × `missing_hp`, 대상이 이걸로 쓰러지면 재사용 대기시간 80% 반환(`kill_refund`) |
+
+연출 이벤트는 `reap_wind`·`reap_sweep`·`reap_edge`·`scythe_throw`·`scythe_catch`·`soul_rend`·`reap`·`reap_strike`·`reap_soul` 이고, 리그는 `lunge`·`reap`·`scythe_throw`·`scythe_catch` 를 `on_fx` 로 받습니다.
 
 
 ## 3D 모델
@@ -283,12 +302,15 @@ PNG 가 없으면 게임은 예전처럼 글자 아이콘으로 대신 보여 �
 | `leap_slam` | 지정 지점으로 도약해 착지 범위 피해 + 둔화 (점프 중 공중 상태). `"aim": "enemy"` 면 적 챔피언을 지정해 뛰어들고 `stun`, `zone`(착지 자리 장판 값) 도 쓸 수 있음 | `range`, `speed`, `radius`, `damage`, `slow`, `slow_duration`, `stun`, `zone` |
 | `cocoon` | 시전 방향과 수직으로 나란히 고치를 놓고, 부화하면 새끼 거미가 적에게 다가가 거미줄 평타로 공격 | `range`, `count`, `spacing`, `hatch`, `cocoon_hp`, `baby_hp`, `max_babies`, `baby_speed`, `baby_ad`, `baby_ad_ratio` |
 | `spit_pool` | 포물선으로 뱉은 덩어리가 착지해 피해 + 웅덩이 장판을 남김 (이무기 Q 독 `venom` / 용 Q 불 `fire`, `style` 이 모양을 정함) | `range`, `flight`, `radius`, `duration`, `damage`, `slow`, `damage_per_sec`, `style` |
-| `lunge` | 짧은 예고 뒤 직선 돌진, 지나는 길의 적을 한 번씩 물어뜯어 피해 + 둔화 (이무기 W) | `range`, `width`, `windup`, `speed`, `damage`, `slow`, `slow_duration` |
+| `lunge` | 짧은 예고 뒤 직선 돌진, 지나는 길의 적을 한 번씩 물어뜯어 피해 + 둔화 (이무기 W, 사신 E). `untargetable` 이면 돌진 중 대상 지정 불가 | `range`, `width`, `windup`, `speed`, `damage`, `slow`, `slow_duration`, `untargetable`, `hit_fx` |
 | `serpent_slam` | 지연 뒤 한 지점을 내려찍어 피해 + 기절, 이어서 퍼지는 충격파가 피해 + 둔화 (이무기 E) | `range`, `radius`, `delay`, `wave_radius`, `wave_ratio`, `wave_slow`, `stun` |
 | `dive` | 머리부터 잠겨 대상 불가 상태로 이동하다가 지정 지점에서 솟구쳐 피해 + 띄움 (이무기 R) | `range`, `sink`, `speed`, `travel_max`, `radius`, `damage`, `airborne` |
 | `tornado` | `delay` 뒤 전방 부채꼴 바람(피해 + 둔화 + 밀어냄) + 관통 회오리 투사체(피해 + 에어본). 준비 중 기절하면 불발 (용 W, `"aim": "cone"`) | `range`, `cone_range`, `angle`, `speed`, `width`, `delay`, `damage`, `cone_damage`, `airborne`, `slow`, `knock_distance` |
 | `wing_sweep` | `delay` 뒤 시전자 둘레에 피해 + 둔화 + 바깥으로 밀어냄 (용 E, `"aim": "self"`) | `radius`, `delay`, `damage`, `slow`, `knock_distance`, `wall_stun` |
 | `sky_dive` | `rise` 동안 떠올라(대상 지정 불가) 지정 지점까지 수평 비행(`speed`), 길에 `path_damage`, 착지에 `damage` + 둔화 + `zone` 불길 (용 R) | `range`, `radius`, `rise`, `speed`, `height`, `path_width`, `damage`, `path_damage`, `zone` |
+| `scythe_sweep` | `delay` 뒤 전방 부채꼴 베기, 바깥 띠(`inner_radius` 바깥)는 `edge_mult` 배 피해 + 둔화 + 챔피언마다 회복 (사신 Q) | `range`, `inner_radius`, `angle`, `delay`, `damage`, `edge_mult`, `slow`, `heal` |
+| `scythe_throw` | `windup` 뒤 관통 투사체를 던지고, 끝에서 시전자에게 되돌아오며 다시 맞힘 (사신 W) | `range`, `width`, `speed`, `return_speed`, `windup`, `damage`, `return_ratio`, `slow` |
+| `execute` | 대상 지정, `delay` 뒤 대상 자리(따라감)에 피해 + 잃은 체력 비례 추가 피해, 처치 시 재사용 대기시간 반환 (사신 R) | `range`, `radius`, `delay`, `damage`, `missing_hp`, `kill_refund` |
 
 피해 계수는 `ad_ratio`, `bonus_ad_ratio`, `ap_ratio`, 피해 유형은 `damage_type`(`physical`/`magic`/`true`) 입니다.
 장판 초당 피해처럼 따로 계산하는 수치는 `damage_per_sec` + `damage_per_sec_ad` 처럼 `<이름>` + `<이름>_ap`(주문력), `_ad`(공격력) 계수를 씁니다.
@@ -311,7 +333,7 @@ game/server/abilities.py       스킬 종류(type)별 동작 처리 (장판·고
 game/server/bot.py             봇 AI
 game/client/gl.py              moderngl 렌더러, 카메라, 2D 오버레이
 game/client/models.py          3D 모델 로더 (OBJ / glTF), 모델 라이브러리
-game/client/rigs/              절차적 애니메이션 리그 (spider.py = 거미 여왕: 다리 IK·자세 섞기, serpent.py = 이무기: 궤적을 따라가는 몸통·S자 목, dragon.py + dragon_assets.py = 용: 네 다리 걷기·접히는 날개·긴 목)
+game/client/rigs/              절차적 애니메이션 리그 (spider.py = 거미 여왕: 다리 IK·자세 섞기, serpent.py = 이무기: 궤적을 따라가는 몸통·S자 목, dragon.py + dragon_assets.py = 용: 네 다리 걷기·접히는 날개·긴 목, reaper.py = 망령 사신: 팔 IK·낫·천 시뮬레이션 옷자락)
 game/client/audio.py           효과음 재생 (data/sounds.json, 거리·좌우 위치, 음량 설정)
 game/shared/spells.py          소환사 주문 목록 (이름·설명·수치 표시)
 tools/                         아이콘·초상화·커서·BGM·이펙트 그림 제작 (build_icons, build_portraits, build_cursors, build_bgm, build_fx_sprites)
@@ -325,7 +347,7 @@ game/client/scenes/            타이틀, 로비, 방, 챔피언 선택, 인게�
 - 길찾기가 없어 구조물 주변은 단순 회피로 돌아갑니다 (라인이 일자라 큰 문제는 없음).
 - 인터넷(외부망) 접속은 포트포워딩이 필요합니다. 기본은 같은 네트워크(LAN)용입니다.
 - 클라이언트 예측이 없어 지연이 큰 환경에서는 조작이 늦게 느껴질 수 있습니다.
-- 챔피언이 거미 여왕·이무기·용 셋뿐입니다. 경직(스태거) 연출은 옮기지 않았습니다.
+- 챔피언이 거미 여왕·이무기·용·망령 사신 넷뿐입니다. 경직(스태거) 연출은 옮기지 않았습니다.
 
 
 ### 테스트용 치트 (게임 중 키)

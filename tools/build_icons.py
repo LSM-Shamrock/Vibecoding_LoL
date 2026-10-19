@@ -28,6 +28,7 @@ SKILLS = {
     "spider": {"Q": "lorc/divergence", "W": "lorc/spider-web", "E": "sbed/big-egg", "R": "@spider_leap"},
     "serpent": {"Q": "lorc/droplet-splash", "W": "lorc/bestial-fangs", "E": "lorc/earth-spit", "R": "@serpent_dive"},
     "dragon": {"Q": "lorc/fire-zone", "W": "lorc/wind-slap", "E": "lorc/bat-wing", "R": "lorc/burning-meteor"},
+    "reaper": {"Q": "lorc/serrated-slash", "W": "lorc/boomerang-sun", "E": "lorc/haunting", "R": "lorc/grim-reaper"},
 }
 
 # 소환사 주문 이름 -> (아이콘, 배경 색)

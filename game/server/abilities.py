@@ -310,10 +310,14 @@ def lunge(cx):
     tx, tz = sim.resolve_position(c.x + cx.ux * dist, c.z + cx.uz * dist, c.radius)
     windup = ab.get("windup", 0.4)
     c.clear_orders()
-    sweep = {"ab": ab, "rank": cx.rank, "dmg": sim.ability_damage(c, ab, cx.rank), "half": ab.get("width", 1.6) / 2, "hit": set()}
+    sweep = {"ab": ab, "rank": cx.rank, "dmg": sim.ability_damage(c, ab, cx.rank), "half": ab.get("width", 1.6) / 2, "hit": set(),
+             "fx": ab.get("hit_fx", "bite")}
     c.dash = {"x": tx, "z": tz, "speed": ab["speed"], "follow": None, "empower": None, "delay": windup, "sweep": sweep}
-    fx(sim, "lunge", c.x, c.z, x2=tx, z2=tz, delay=windup, dur=math.hypot(tx - c.x, tz - c.z) / ab["speed"], w=ab.get("width", 1.6),
-       d=c.id, tm=c.team)
+    dur = math.hypot(tx - c.x, tz - c.z) / ab["speed"]
+    if ab.get("untargetable"):                          # 망령 걸음: 지나가는 동안 대상으로 지정되지 않는다
+        c.untarget_until = sim.time + windup + dur + 0.05
+    fx(sim, "lunge", c.x, c.z, x2=tx, z2=tz, delay=windup, dur=dur, w=ab.get("width", 1.6),
+       d=c.id, tm=c.team, style=ab.get("style", "lunge"))
     return True
 
 
@@ -520,4 +524,125 @@ def sky_dive(cx):
               "delay": rise, "flight": flight}
     fx(sim, "sky_dive", c.x, c.z, x2=gx, z2=gz, rise=rise, dur=round(flight, 3), h=ab.get("height", 6.5), r=ab["radius"],
        w=ab.get("path_width", 5.0), w2=ab.get("inner_width", 3.0), zr=ab.get("zone", {}).get("radius", 0.0), d=c.id, tm=c.team)
+    return True
+
+
+# ====================================================================== 망령 사신
+def in_cone(c, u, ux, uz, half):
+    """u 가 c 에서 (ux, uz) 방향 반각 half 의 부채꼴 안에 (몸 크기까지 쳐서) 들어오는가."""
+    rx, rz = u.x - c.x, u.z - c.z
+    d = math.hypot(rx, rz)
+    if d < 1e-6:
+        return True
+    ang = math.acos(max(-1.0, min(1.0, (rx * ux + rz * uz) / d)))
+    return ang <= half + math.asin(min(1.0, u.radius / d))
+
+
+@handler("scythe_sweep")
+def scythe_sweep(cx):
+    """Q 영혼 베기: 낫을 젖혔다가(delay) 앞쪽 부채꼴을 휩쓴다. 날끝(inner_radius 바깥)에 걸린 적은 edge_mult 배 피해 + 둔화,
+    날끝으로 벤 적 챔피언마다 체력을 회복한다."""
+    sim, c, ab, rank = cx.sim, cx.c, cx.ab, cx.rank
+    delay = ab.get("delay", 0.3)
+    R = ab["range"]
+    inner = ab.get("inner_radius", R * 0.6)
+    half = math.radians(ab.get("angle", 160)) / 2
+    ux, uz = cx.ux, cx.uz
+    dmg = sim.ability_damage(c, ab, rank)
+    dtype = ab.get("damage_type", "physical")
+    heal_each = sim.ability_amount(c, ab, rank, "heal")
+    a = math.atan2(uz, ux)
+    fx(sim, "reap_wind", c.x, c.z, a=a, r=R, w=ab.get("angle", 160), delay=delay, d=c.id, tm=c.team)
+
+    def strike(sim_):
+        if c.dead or c.stunned(sim_.time):
+            return
+        healed = 0.0
+        for u in sim_.enemies_in_radius(c.team, c.x, c.z, R):
+            if not in_cone(c, u, ux, uz, half):
+                continue
+            edge = math.hypot(u.x - c.x, u.z - c.z) + u.radius >= inner
+            sim_.deal_damage(c, u, dmg * (ab.get("edge_mult", 1.5) if edge else 1.0), dtype, ability=True)
+            if edge:
+                u.apply_slow(sim_.time, gamedata.rank_value(ab, "slow", rank), gamedata.rank_value(ab, "slow_duration", rank, 1.0))
+                fx(sim_, "reap_edge", u.x, u.z, tm=c.team)
+                if isinstance(u, Champion):
+                    healed += heal_each
+        if healed > 0:
+            sim_.heal(c, healed, c)
+        fx(sim_, "reap_sweep", c.x, c.z, a=a, r=R, r0=inner, w=ab.get("angle", 160), tm=c.team)
+    sim.schedule(delay, strike)
+    c.clear_orders()
+    c.lock_until = sim.time + delay                    # 젖히는 동안은 제자리
+    return True
+
+
+@handler("scythe_throw")
+def scythe_throw(cx):
+    """W 낫 던지기: 젖혔다가(windup) 낫을 일직선으로 던진다. 끝까지 날아간 낫은 시전자에게 되돌아오며,
+    가는 길과 오는 길에 닿은 적을 한 번씩 벤다 (오는 길은 return_ratio 배 피해)."""
+    sim, c, ab, rank = cx.sim, cx.c, cx.ab, cx.rank
+    windup = ab.get("windup", 0.22)
+    ux, uz = cx.ux, cx.uz
+    dmg = sim.ability_damage(c, ab, rank)
+    dtype = ab.get("damage_type", "physical")
+
+    def caught(sim_, p):
+        fx(sim_, "scythe_catch", p.x, p.z, d=c.id, tm=c.team)
+
+    def launch(sim_):
+        if c.dead or c.stunned(sim_.time):                 # 던지기 전에 쓰러지거나 기절하면 손에 그대로 남는다
+            fx(sim_, "scythe_catch", c.x, c.z, d=c.id, tm=c.team)
+            return
+        p = Projectile(sim_.new_id(), c.team, c, c.x + ux * 0.6, c.z + uz * 0.6, ab.get("style", "scythe"), ab["speed"])
+        p.dx, p.dz = ux, uz
+        p.remaining = ab["range"] - 0.6
+        p.width = ab["width"]
+        p.pierce = True
+        p.ret = {"owner": c.id, "back": False, "speed": ab.get("return_speed", ab["speed"]), "until": sim_.time + 4.0}
+        p.on_return = caught
+
+        def on_hit(s_, target):
+            k = ab.get("return_ratio", 0.6) if p.ret["back"] else 1.0
+            s_.deal_damage(c, target, dmg * k, dtype, ability=True)
+            target.apply_slow(s_.time, gamedata.rank_value(ab, "slow", rank), gamedata.rank_value(ab, "slow_duration", rank, 1.0))
+        p.on_hit = on_hit
+        sim_.projectiles[p.id] = p
+        fx(sim_, "scythe_throw", c.x, c.z, d=c.id, tm=c.team)
+    sim.schedule(windup, launch)
+    c.clear_orders()
+    c.lock_until = sim.time + windup
+    return True
+
+
+@handler("execute")
+def execute(cx):
+    """R 사형 선고: 대상 적 챔피언 머리 위로 영혼의 낫을 불러내 delay 뒤 내려친다 (예고 원은 대상을 따라간다).
+    둘레의 적은 피해 + 잃은 체력 × missing_hp 만큼 더 입고, 대상이 이걸로 쓰러지면 재사용 대기시간의 kill_refund 가 돌아온다."""
+    sim, c, ab, rank = cx.sim, cx.c, cx.ab, cx.rank
+    tg = sim.pick_enemy_champion(c, cx.x, cx.z, ab["range"])
+    if tg is None:
+        return False
+    delay = ab.get("delay", 0.8)
+    r = ab.get("radius", 1.8)
+    dmg = sim.ability_damage(c, ab, rank)
+    miss = gamedata.rank_value(ab, "missing_hp", rank, 0.0)
+    dtype = ab.get("damage_type", "physical")
+
+    def strike(sim_, eff):
+        for u in sim_.enemies_in_radius(c.team, eff.x, eff.z, r):
+            extra = miss * max(0.0, u.max_hp - u.hp) if isinstance(u, Champion) else 0.0
+            sim_.deal_damage(c, u, dmg + extra, dtype, ability=True)
+            apply_cc(sim_, ab, rank, u)
+        if tg.dead and ab.get("kill_refund"):
+            cd = c.cooldown_of("R")
+            c.ready_at["R"] = min(c.ready_at["R"], sim_.time + cd * (1.0 - ab["kill_refund"]))
+            fx(sim_, "reap_soul", tg.x, tg.z, d=c.id, tm=c.team)
+        fx(sim_, "reap_strike", eff.x, eff.z, r=r, tm=c.team)
+    eff = GroundEffect(sim.new_id(), c.team, c, tg.x, tg.z, r, sim.time + delay, "reap", strike)
+    eff.follow = tg.id
+    sim.effects[eff.id] = eff
+    c.clear_orders()
+    c.lock_until = sim.time + delay
+    fx(sim, "reap", c.x, c.z, d=c.id, dur=delay, x2=tg.x, z2=tg.z, r=r, tg=tg.id, tm=c.team)
     return True

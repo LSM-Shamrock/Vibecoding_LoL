@@ -307,6 +307,8 @@ class Projectile:
         self.pierce = False           # True 면 맞은 뒤에도 계속 날아가 경로의 모든 적을 맞힌다
         self.hit_ids = set()
         self.traveled = 0.0
+        self.ret = None               # 되돌아오는 투사체: {"owner", "back", "speed", "until"} (사신의 낫)
+        self.on_return = None         # 되돌아오는 투사체가 사라질 때 f(sim, projectile)
 
 
 class GroundEffect:

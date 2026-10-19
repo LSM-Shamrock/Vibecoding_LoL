@@ -19,6 +19,7 @@ from ..shared import data as gamedata
 from ..shared.constants import ROOT_DIR
 from . import procedural
 from .gl import Mesh, bounds_of
+from .rigs.reaper import build_scythe_projectile
 
 # trimesh 는 scipy 가 없으면 경고 로그를 크게 남기지만 동작에는 문제가 없다
 logging.getLogger("trimesh").setLevel(logging.ERROR)
@@ -246,6 +247,7 @@ class ModelLibrary:
             "minion_bolt": self._mesh(P.build_orb((1.0, 1.0, 1.0), 0.06)),
             "cannon_ball": self._mesh(P.build_orb((0.55, 0.55, 0.6), 0.09)),
             "fire_bolt": self._mesh(P.build_orb((1.0, 0.62, 0.18), 0.1)),
+            "scythe": self._mesh(build_scythe_projectile()),                       # 사신이 던진 낫
         }
         # 용의 회오리: 9겹 원뿔대 (보스러시 원본과 같은 구성)
         self.tornado_layers = [self._mesh(P.build_tornado_layer(i)) for i in range(9)]

@@ -68,6 +68,9 @@ LAVA_HOT = (1.0, 0.82, 0.38)
 SCORCH = (0.12, 0.04, 0.025)            # 불길 웅덩이의 그을린 바닥
 LAVA_RIM = (1.0, 0.42, 0.1)
 WIND = (1.0, 0.88, 0.7)                 # 날개바람 (불기운이 섞인 뜨거운 바람)
+REAP = (0.62, 0.48, 1.0)                # 사신의 영혼 빛
+REAP_HOT = (0.86, 0.82, 1.0)
+REAP_SOUL = (0.55, 0.95, 1.0)           # 사신의 눈·날끝과 같은 청록 빛
 
 _rnd = random.Random(11)
 
@@ -359,6 +362,10 @@ class Vfx:
             c_ = (0.87, 0.92, 1.0)
             self.emit("ring", x, 0.8, z, size=0.8, size_to=2.2, dur=0.35, col=c_, mode="flat", fade_pow=1.1)
             self.burst("spark", x, 1.0, z, 8, 3.2, 0.25, 0.4, c_, up=1.5)
+        elif style == "scythe":                               # 던진 낫: 베인 자리에 영혼 빛이 튄다
+            self.emit("slash", x, 1.1, z, size=1.9, dur=0.25, col=REAP_HOT, rot=rr(0, 6), fade_pow=0.8)
+            self.emit("glow", x, 1.0, z, size=1.5, dur=0.25, col=REAP)
+            self.burst("spark", x, 1.0, z, 7, 3.2, 0.3, 0.4, REAP_SOUL, up=1.5)
         elif style == "snowball":                             # 눈덩이: 눈가루
             self.emit("dust", x, 1.0, z, size=1.0, size_to=2.0, dur=0.4, col=PALE, alpha=0.8, add=False)
             self.burst("spark", x, 1.0, z, 6, 3.0, 0.3, 0.4, PALE, up=1.5)
@@ -516,6 +523,8 @@ class Vfx:
             self.clear_ctx()
 
     def fx_lunge(self, kind, ev):                             # 돌진: 노려보는 동안 예고선, 그 길로 쏜살같이 지나간다
+        if ev.get("style") == "wraith":
+            return self.wraith_step(ev)
         x, z, x2, z2 = ev["x"], ev["z"], ev["x2"], ev["z2"]
         dx, dz = x2 - x, z2 - z
         dist = max(0.5, math.hypot(dx, dz))
@@ -809,6 +818,101 @@ class Vfx:
         else:
             return
 
+    # ---- 망령 사신 --------------------------------------------------------
+    def fx_reap_wind(self, kind, ev):                         # 영혼 베기 준비: 부채꼴 예고 + 젖힌 낫 끝으로 영혼이 빨려 든다
+        x, z, r = ev["x"], ev["z"], ev.get("r", 4.0)
+        rot = facing_to_rot(ev["a"])
+        delay = max(0.1, ev.get("delay", 0.3))
+        h = r / 0.74
+        self.emit("wave", x, 0.1, z, size=(h * 1.05, h), dur=delay + 0.05, col=REAP, mode="flat", rot=rot, pivot=0.45, alpha=0.4,
+                  fade_in=0.05, fade_pow=0.4)
+        bx, bz = x + math.sin(rot + 2.4) * 1.6, z + math.cos(rot + 2.4) * 1.6
+        self.emit("glow", bx, 1.4, bz, size=0.6, size_to=1.6, dur=delay, col=REAP_SOUL, alpha=0.8)
+        for i in range(9):
+            b_ = rr(0, math.tau)
+            d = rr(1.2, 2.2)
+            self.emit("glow", bx + math.cos(b_) * d, rr(0.6, 2.0), bz + math.sin(b_) * d, size=rr(0.25, 0.45), size_to=0.08, dur=delay,
+                      col=REAP, vel=(-math.cos(b_) * d / delay, 0.0, -math.sin(b_) * d / delay), fade_pow=0.6)
+
+    def fx_reap_sweep(self, kind, ev):                        # 영혼 베기: 반원을 휩쓰는 낫 자국, 날끝을 따라 흩어지는 영혼
+        x, z, r = ev["x"], ev["z"], ev.get("r", 4.0)
+        rot = facing_to_rot(ev["a"])
+        half = math.radians(ev.get("w", 160)) / 2
+        sweep = 0.2
+        for k in range(2):
+            self.emit("slash", x, 0.95 + k * 0.02, z, size=r * 1.7, dur=0.24, delay=k * 0.03, col=REAP, mode="flat", alpha=0.75 - 0.25 * k,
+                      rot=rot + half * 0.85, spin=-(2 * half * 0.85) / sweep, pivot=0.22, fade_pow=1.2, fade_in=0.02)
+        self.emit("arc", x, 1.0, z, size=r * 1.8, dur=0.22, col=REAP_SOUL, mode="flat", rot=rot + half * 0.85, alpha=0.8,
+                  spin=-(2 * half * 0.85) / sweep, pivot=0.26, fade_pow=1.2)
+        for i in range(14):
+            b_ = rot + half * 0.85 - (2 * half * 0.85) * i / 13
+            d = r * rr(0.75, 0.95)
+            self.emit("glow", x + math.sin(b_) * d, rr(0.6, 1.3), z + math.cos(b_) * d, size=rr(0.3, 0.55), size_to=0.05, dur=rr(0.4, 0.7),
+                      delay=sweep * i / 13, col=REAP, vel=(math.sin(b_) * 1.5, rr(0.6, 1.8), math.cos(b_) * 1.5), fade_pow=0.8)
+
+    def fx_reap_edge(self, kind, ev):                         # 날끝에 베인 적: 영혼이 뜯겨 나온다
+        x, z = ev["x"], ev["z"]
+        self.emit("claw", x, 1.0, z, size=1.7, dur=0.26, col=REAP_HOT, rot=rr(-0.6, 0.6))
+        self.burst("glow", x, 1.1, z, 6, 2.2, 0.3, 0.5, REAP_SOUL, up=2.2, size_to=0.05)
+
+    def fx_scythe_throw(self, kind, ev):                      # 낫 던지기: 손을 떠나는 순간의 회오리 빛
+        x, z = ev["x"], ev["z"]
+        self.emit("swirl", x, 1.2, z, size=1.4, size_to=2.6, dur=0.35, col=REAP, spin=-14.0, fade_pow=1.0)
+
+    def fx_scythe_catch(self, kind, ev):                      # 돌아온 낫을 받아 쥔다
+        x, z = ev["x"], ev["z"]
+        self.emit("glow", x, 1.2, z, size=1.6, dur=0.25, col=REAP_SOUL, alpha=0.7)
+        self.burst("spark", x, 1.2, z, 5, 2.0, 0.25, 0.35, REAP_HOT, up=1.0)
+
+    def wraith_step(self, ev):                                # 망령 걸음: 반투명한 잔상이 길을 따라 늘어서고 영혼 불꽃이 흩날린다
+        x, z, x2, z2 = ev["x"], ev["z"], ev["x2"], ev["z2"]
+        dx, dz = x2 - x, z2 - z
+        dist = max(0.5, math.hypot(dx, dz))
+        rot = math.atan2(dx, dz)
+        w = ev.get("w", 1.6)
+        delay = ev.get("delay", 0.05)
+        dur = max(0.1, ev.get("dur", 0.2))
+        self.emit("swirl", x, 0.12, z, size=2.6, size_to=1.0, dur=0.45, col=REAP, mode="flat", spin=9.0, alpha=0.8)
+        self.emit("streak", x, 0.15, z, size=(w * 0.8, dist + 1.2), dur=dur + 0.5, delay=delay, col=REAP, mode="flat", rot=rot, pivot=0.5,
+                  alpha=0.55, fade_pow=1.0)
+        for i in range(9):
+            f = i / 8
+            px, pz = x + dx * f, z + dz * f
+            self.emit("glow", px, 1.0, pz, size=1.6, size_to=0.6, dur=0.5, delay=delay + dur * f, col=REAP, alpha=0.45, fade_pow=1.2)
+            self.emit("glow", px + rr(-0.4, 0.4), rr(0.3, 1.4), pz + rr(-0.4, 0.4), size=rr(0.3, 0.5), size_to=0.05, dur=rr(0.5, 0.8),
+                      delay=delay + dur * f, col=REAP_SOUL, vel=(rr(-0.4, 0.4), rr(1.0, 2.0), rr(-0.4, 0.4)), fade_pow=0.8)
+
+    def fx_soul_rend(self, kind, ev):                         # 망령 걸음에 스친 적
+        x, z = ev["x"], ev["z"]
+        self.emit("claw", x, 1.0, z, size=1.5, dur=0.25, col=REAP, rot=rr(-0.6, 0.6))
+        self.burst("glow", x, 1.0, z, 5, 2.0, 0.28, 0.45, REAP_SOUL, up=1.8, size_to=0.05)
+
+    def fx_reap(self, kind, ev):                              # 사형 선고 준비: 대상 발밑에 영혼이 소용돌이친다
+        x2, z2, r = ev.get("x2", ev["x"]), ev.get("z2", ev["z"]), ev.get("r", 1.8)
+        dur = max(0.2, ev.get("dur", 0.8))
+        self.emit("swirl", x2, 0.12, z2, size=r * 2.8, size_to=r * 1.6, dur=dur, col=REAP, mode="flat", spin=4.0, alpha=0.7, fade_in=0.1,
+                  fade_pow=0.5)
+        for i in range(10):
+            b_ = rr(0, math.tau)
+            self.emit("glow", x2 + math.cos(b_) * r, 0.2, z2 + math.sin(b_) * r, size=rr(0.3, 0.5), size_to=0.1, dur=dur * rr(0.6, 1.0),
+                      delay=rr(0, dur * 0.3), col=REAP_SOUL, vel=(0, rr(2.0, 3.5), 0), fade_pow=0.8)
+        self.emit("glow", ev["x"], 2.4, ev["z"], size=1.0, size_to=2.4, dur=dur, col=REAP_SOUL, alpha=0.6)
+
+    def fx_reap_strike(self, kind, ev):                       # 사형 선고: 하늘에서 거대한 영혼의 낫이 내리꽂힌다
+        x, z, r = ev["x"], ev["z"], ev.get("r", 1.8)
+        self.emit("slash", x, 2.6, z, size=(r * 3.2, r * 3.6), dur=0.28, col=REAP_HOT, rot=0.9, spin=-9.0, fade_in=0.0, fade_pow=0.9)
+        self.emit("beam", x, 3.5, z, size=(1.2, 7.0), size_to=(0.3, 7.0), dur=0.4, col=REAP_SOUL, fade_in=0.02)
+        self.emit("crack", x, 0.06, z, size=r * 2.8, dur=1.2, col=REAP, mode="flat", rot=rr(0, 6), fade_pow=0.8)
+        self.emit("glow", x, 0.1, z, size=r * 2.6, dur=0.35, col=REAP, mode="flat")
+        self.shock(x, z, r, REAP_HOT, 0.45)
+        self.shock(x, z, r * 1.6, REAP, 0.6, 0.06)
+        self.burst("glow", x, 0.6, z, 12, r * 2.2, 0.4, 0.7, REAP_SOUL, up=4.0, grav=-6, size_to=0.05)
+
+    def fx_reap_soul(self, kind, ev):                         # 사형 선고로 처치: 영혼이 빠져나와 위로 흩어진다
+        x, z = ev["x"], ev["z"]
+        self.emit("glow", x, 1.0, z, size=1.2, size_to=2.8, dur=0.9, col=REAP_SOUL, vel=(0, 2.5, 0), fade_pow=0.8)
+        self.emit("ring", x, 0.12, z, size=1.0, size_to=4.0, dur=0.6, col=REAP_HOT, mode="flat")
+
     # ============================================================== 시전(cast) 연출 (서버 이펙트가 없는 스킬)
     def cast(self, champ, slot, x, z, facing):
         """스킬을 쓰는 순간 시전자에게 붙는 이펙트. champ: 챔피언 id."""
@@ -842,6 +946,7 @@ class Vfx:
         "turret_shot": ("glow", 0.5, 0.5, (1.0, 0.8, 0.4), (1.0, 0.8, 0.4), 1.2, "ember", 22),
         "turret_shot_2": ("glow", 0.5, 0.5, (1.0, 0.55, 0.3), (1.0, 0.55, 0.3), 1.6, "ember", 32),     # 연속 공격 중: 붉고 불씨가 많다
         "turret_shot_3": ("glow", 0.5, 0.5, (1.0, 0.3, 0.2), (1.0, 0.3, 0.2), 2.2, "ember", 46),   # 뾰족한 꼬리 대신 둥근 빛 + 뒤로 남는 입자 경로
+        "scythe": ("", 0.0, 0.0, REAP, REAP_SOUL, 1.4, "spark", 16),
         "minion_bolt": ("streak", 1.0, 0.25, PALE, PALE, 0.7, None, 0),
         "cannon_ball": ("streak", 1.2, 0.4, (0.8, 0.8, 0.85), (0.8, 0.8, 0.85), 0.0, None, 0),
     }

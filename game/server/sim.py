@@ -1475,6 +1475,23 @@ class Simulation:
                         p.x += p.dx * step
                         p.z += p.dz * step
             else:
+                if p.ret is not None and p.ret["back"]:              # 되돌아오는 낫: 던진 이를 향해 날아와 손에 닿으면 끝
+                    own = self.unit(p.ret["owner"])
+                    if own is None or not own.alive or getattr(own, "dead", False) or self.time > p.ret["until"]:
+                        p.dead = True
+                    else:
+                        dx, dz = own.x - p.x, own.z - p.z
+                        d = math.hypot(dx, dz)
+                        if d <= p.speed * dt + own.radius * 0.5:
+                            p.dead = True
+                        else:
+                            p.dx, p.dz = dx / d, dz / d
+                            p.remaining = d
+                    if p.dead:
+                        self.projectiles.pop(p.id, None)
+                        if p.on_return:
+                            p.on_return(self, p)
+                        continue
                 step = min(p.speed * dt, p.remaining)
                 ox, oz = p.x, p.z
                 p.x += p.dx * step
@@ -1498,6 +1515,11 @@ class Simulation:
                     self.event(e="fx", fx=p.style + "_hit", x=round(hit.x, 2), z=round(hit.z, 2), tm=p.team)
                 if hits and not p.pierce:
                     p.dead = True
+                elif p.remaining <= 1e-4 and p.ret is not None and not p.ret["back"]:
+                    p.ret["back"] = True                             # 끝까지 갔다: 되돌아오며 다시 벤다
+                    p.speed = p.ret["speed"]
+                    p.hit_ids = set()
+                    p.remaining = 1.0
                 elif p.remaining <= 1e-4:
                     p.dead = True
                     if not p.hit_ids and p.on_miss:

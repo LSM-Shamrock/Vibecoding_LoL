@@ -136,6 +136,7 @@ AIM_BY_TYPE = {
     "volley": "cone", "zone": "ground", "cocoon": "ground", "leap_slam": "ground",
     "spit_pool": "ground", "lunge": "line", "serpent_slam": "ground", "dive": "teleport",
     "tornado": "cone", "wing_sweep": "circle", "sky_dive": "ground",
+    "scythe_sweep": "cone", "scythe_throw": "line", "execute": "enemy",
 }
 
 
