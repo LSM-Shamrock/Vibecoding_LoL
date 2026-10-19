@@ -1,6 +1,6 @@
 """망령 사신 — 절차적 리그.
 
-다리 없이 떠 있는 해골 사신: 두건 속 해골, 몸통, 소매 달린 두 팔(2본 IK), 두 손으로 쥔 거대한 낫.
+다리 없이 떠 있는 사신: 속이 새까만 두건, 몸통, 소매 달린 두 팔(2본 IK), 두 손으로 쥔 금장식 낫.
 옷자락(긴 로브·등 망토·소매 끝)은 천 시뮬레이션으로 움직인다. 입자(Verlet) 사이를 거리 제약으로 묶고,
 위쪽은 몸에 붙들어 두고 아래로 갈수록 원래 모양으로 약하게만 끌어당겨서, 몸이 움직이면 끝자락이 늦게 따라오며
 바람(흔들림)에 펄럭인다. 끝자락은 기둥마다 길이가 들쭉날쭉해 너덜너덜하다.
@@ -37,12 +37,16 @@ BUTT, TOP = -0.75, 1.65
 BLADE_LEN = 1.3
 GRIP2 = 0.5                     # 왼손이 쥐는 자리 (오른손은 원점). 팔이 닿지 않으면 왼손은 놓는다
 
-CLOTH_TOP = (0.21, 0.18, 0.28)
-CLOTH_HEM = (0.36, 0.28, 0.5)
+CLOTH_TOP = (0.19, 0.15, 0.27)  # 로브: 짙은 보라 -> 끝자락은 영혼 빛이 스민 청록 안개
+CLOTH_HEM = (0.2, 0.37, 0.46)
+CAPE_TOP = (0.3, 0.06, 0.11)    # 등 망토: 검붉은 포도주색
+CAPE_HEM = (0.5, 0.11, 0.2)
+SASH = (0.36, 0.07, 0.13)
+GOLD = (0.86, 0.66, 0.3)
 BONE = (0.9, 0.87, 0.78)
-SHAFT = (0.24, 0.17, 0.15)
+SHAFT = (0.1, 0.07, 0.11)       # 흑단 자루
 METAL = (0.55, 0.5, 0.62)
-BLADE = (0.8, 0.84, 0.92)
+BLADE = (0.42, 0.38, 0.56)      # 보랏빛 흑철 날
 SOUL = (0.55, 0.95, 1.0)        # 날끝의 영혼 빛
 
 H = 1 / 50                      # 천 시뮬레이션 한 걸음 (초)
@@ -139,9 +143,64 @@ def _loft(rings, color, seg=22, cut=None):
     return b
 
 
+HOOD_RINGS = [(-0.31, 0.31, 0.27, -0.03), (-0.2, 0.25, 0.25, 0.0, 0.03), (-0.06, 0.215, 0.235, 0.0, 0.05),
+              (0.08, 0.205, 0.23, -0.01, 0.06), (0.19, 0.175, 0.2, -0.04, 0.04), (0.27, 0.12, 0.15, -0.09),
+              (0.33, 0.06, 0.08, -0.15), (0.36, 0.0, 0.0, -0.21)]
+
+
+def _ring_pt(rg, a, grow=0.0):
+    y, rx, rz, cz = rg[:4]
+    fr = rg[4] if len(rg) > 4 else 0.0
+    c = math.cos(a)
+    return np.array([math.sin(a) * (rx + grow), y, c * (rz + grow) + cz + fr * max(0.0, c) ** 2])
+
+
+def _subdiv(rings, n):
+    """단면 사이사이에 n 개씩 끼워 넣어 촘촘하게 (얼굴 구멍 테두리를 매끈하게 따내려고)."""
+    pad = [tuple(rg) + (0.0,) * (5 - len(rg)) for rg in rings]
+    out = []
+    for a, b in zip(pad, pad[1:]):
+        for k in range(n + 1):
+            t = k / (n + 1)
+            out.append(tuple(x + (y - x) * t for x, y in zip(a, b)))
+    return out + [pad[-1]]
+
+
+HOOD = _subdiv(HOOD_RINGS, 4)
+HOOD_SEG = 72
+FACE_Y = (-0.2, 0.2)
+
+
+def _face_half(y):
+    """얼굴 구멍의 높이별 반폭(각도): 아래는 넓고 위로 갈수록 좁아지는 뾰족한 아치."""
+    k = max(0.0, y / FACE_Y[1])
+    return math.radians(50) * max(0.0, 1 - k * k) ** 0.5 + math.radians(5)
+
+
+def _hood_at(y):
+    for a, b in zip(HOOD, HOOD[1:]):
+        if a[0] <= y <= b[0]:
+            t = (y - a[0]) / max(1e-9, b[0] - a[0])
+            return tuple(x + (z - x) * t for x, z in zip(a, b))
+    return HOOD[-1]
+
+
+def _hood_trim(b, n=14):
+    """두건 얼굴 구멍 테두리를 따라 두른 금테."""
+    y0, y1 = FACE_Y
+    side = [(y0 + (y1 - y0) * k / n) for k in range(n + 1)]
+    loop = [(y0, -_face_half(y0) + 2 * _face_half(y0) * k / 6) for k in range(7)]
+    loop += [(y, _face_half(y)) for y in side[1:]]
+    loop += [(y, -_face_half(y)) for y in reversed(side[:-1])]
+    pts = [_ring_pt(_hood_at(y), a, 0.012) for y, a in loop]
+    for p, q in zip(pts, pts[1:]):
+        _rod(b, p, q, 0.016, GOLD, 6)
+        b.sphere(tuple(q), 0.016, GOLD, 6, 4)
+
+
 def _face_hole(y, a):
     a = (a + PI) % (2 * PI) - PI
-    return abs(a) < math.radians(52) and -0.17 < y < 0.19
+    return FACE_Y[0] < y < FACE_Y[1] and abs(a) < _face_half(y)
 
 
 def _blade_curve(n=16):
@@ -157,15 +216,49 @@ def _blade_curve(n=16):
     return out
 
 
+def _rod(b, p, q, r, color, seg=6, r_top=None):
+    """p 에서 q 까지 이어진 원기둥을 b 에 붙인다."""
+    u = MeshBuilder()
+    u.cylinder((0, 0, 0), 1.0, 1.0, color, seg, radius_top=(r_top / r if r_top is not None else 1.0))
+    _xf(b, u, _seg(p, q, r))
+
+
 def scythe_builders():
-    """낫 메시 (자루, 날, 날끝 빛) — 낫 좌표, 리그 단위."""
+    """낫 메시 (자루, 날, 빛나는 부분) — 낫 좌표, 리그 단위. 흑단 자루에 금 장식, 보랏빛 날에 영혼 빛 날끝과 룬."""
     shaft, blade, edge = MeshBuilder(), MeshBuilder(), MeshBuilder()
-    shaft.cylinder((0, BUTT, 0), 0.038, TOP - BUTT, SHAFT, 8, radius_top=0.034)
-    shaft.cylinder((0, BUTT - 0.08, 0), 0.03, 0.1, METAL, 8, radius_top=0.045)          # 물미
-    for y in (-0.08, 0.5, 0.62):                                                        # 손잡이 감은 띠
-        shaft.cylinder((0, y, 0), 0.046, 0.06, METAL, 8)
-    shaft.sphere((0, TOP - 0.02, 0), 0.075, METAL, 10, 7)                               # 날 이음매
-    shaft.cylinder((0, TOP + 0.03, 0), 0.05, 0.16, METAL, 8, radius_top=0.0)            # 끝 뿔
+    shaft.cylinder((0, BUTT, 0), 0.038, TOP - BUTT, SHAFT, 10, radius_top=0.034)
+    # 자루를 감아 오르는 금실
+    n = 46
+    hel = [np.array([0.041 * math.cos(k * 0.62), BUTT + 0.05 + (TOP - BUTT - 0.25) * k / n, 0.041 * math.sin(k * 0.62)])
+           for k in range(n + 1)]
+    for a_, b_ in zip(hel, hel[1:]):
+        _rod(shaft, a_, b_, 0.009, GOLD, 4)
+    for y in (-0.1, 0.42, 0.62):                                                        # 손잡이 금테
+        shaft.cylinder((0, y, 0), 0.05, 0.05, GOLD, 10)
+    shaft.cylinder((0, BUTT - 0.06, 0), 0.05, 0.08, GOLD, 10, radius_top=0.042)         # 물미: 금 고리 + 뾰족한 침
+    shaft.cylinder((0, BUTT - 0.26, 0), 0.0, 0.2, METAL, 8, radius_top=0.045)
+    shaft.cylinder((0, TOP - 0.2, 0), 0.04, 0.1, GOLD, 10, radius_top=0.06)             # 날 이음매: 금 받침 + 날개 장식
+    shaft.sphere((0, TOP - 0.03, 0), 0.08, GOLD, 12, 8, (1.0, 0.9, 1.0))
+    for sx in (1, -1):
+        _rod(shaft, (sx * 0.05, TOP - 0.06, -0.02), (sx * 0.17, TOP + 0.1, -0.12), 0.022, GOLD, 6, 0.0)
+        _rod(shaft, (sx * 0.05, TOP - 0.1, -0.02), (sx * 0.14, TOP - 0.02, -0.17), 0.018, GOLD, 6, 0.0)
+    shaft.cylinder((0, TOP + 0.04, 0), 0.045, 0.24, GOLD, 8, radius_top=0.0)            # 끝 뿔
+    edge.sphere((0, TOP - 0.03, 0.07), 0.04, (1, 1, 1), 10, 7, (1.0, 1.0, 0.7))         # 이음매에 박힌 영혼석
+    # 반대쪽 짧은 갈고리 날
+    for k in range(6):
+        s0, s1 = k / 6, (k + 1) / 6
+        p0 = np.array([0.0, TOP - 0.1 - 0.2 * s0 ** 1.5, -0.08 - 0.4 * s0])
+        p1 = np.array([0.0, TOP - 0.1 - 0.2 * s1 ** 1.5, -0.08 - 0.4 * s1])
+        w0, w1 = 0.12 * (1 - s0) + 0.008, 0.12 * (1 - s1) + 0.008
+        t0, t1 = 0.02 * (1 - s0) + 0.004, 0.02 * (1 - s1) + 0.004
+        for sx in (1, -1):
+            a_, b_ = p0 + (sx * t0, 0, 0), p1 + (sx * t1, 0, 0)
+            c_, d_ = p1 + (0, -w1, 0), p0 + (0, -w0, 0)
+            if sx > 0:
+                blade.quad(tuple(a_), tuple(b_), tuple(c_), tuple(d_), BLADE)
+            else:
+                blade.quad(tuple(a_), tuple(d_), tuple(c_), tuple(b_), BLADE)
+        blade.quad(tuple(p0 + (-t0, 0, 0)), tuple(p1 + (-t1, 0, 0)), tuple(p1 + (t1, 0, 0)), tuple(p0 + (t0, 0, 0)), GOLD)
     pts = _blade_curve()
     for (s0, e0, t0), (s1, e1, t1) in zip(pts, pts[1:]):
         for sx in (1, -1):
@@ -175,11 +268,45 @@ def scythe_builders():
                 blade.quad(tuple(a), tuple(b_), tuple(c), tuple(d), BLADE)
             else:
                 blade.quad(tuple(a), tuple(d), tuple(c), tuple(b_), BLADE)
-        blade.quad(tuple(s0 + (-t0, 0, 0)), tuple(s1 + (-t1, 0, 0)), tuple(s1 + (t1, 0, 0)), tuple(s0 + (t0, 0, 0)), METAL)
+        blade.quad(tuple(s0 + (-t0, 0, 0)), tuple(s1 + (-t1, 0, 0)), tuple(s1 + (t1, 0, 0)), tuple(s0 + (t0, 0, 0)), GOLD)
+        for sx in (1, -1):                                                              # 등을 따라 붙은 금테
+            sp0, sp1 = s0 + (s0 - e0) * 0.0, s1
+            g0, g1 = s0 + (e0 - s0) * 0.12, s1 + (e1 - s1) * 0.12
+            q = [sp0 + (sx * (t0 + 0.003), 0, 0), sp1 + (sx * (t1 + 0.003), 0, 0),
+                 g1 + (sx * (t1 * 0.8 + 0.004), 0, 0), g0 + (sx * (t0 * 0.8 + 0.004), 0, 0)]
+            if sx < 0:
+                q = [q[0], q[3], q[2], q[1]]
+            blade.quad(*(tuple(v) for v in q), GOLD)
         e0b, e1b = e0 + (s0 - e0) * 0.1, e1 + (s1 - e1) * 0.1                         # 날끝을 따라 흐르는 빛 띠
         for sx in (1, -1):
             edge.quad(tuple(e0 + (sx * 0.006, 0, 0)), tuple(e1 + (sx * 0.006, 0, 0)),
                       tuple(e1b + (sx * 0.012, 0, 0)), tuple(e0b + (sx * 0.012, 0, 0)), (1, 1, 1))
+    for s_ in (0.12, 0.3, 0.48):                                                        # 날 등에 돋은 금 가시
+        i = int(s_ * (len(pts) - 1))
+        sp, ed, th = pts[i]
+        up = -_n(ed - sp)
+        fw = _n(pts[i + 1][0] - sp)
+        _rod(shaft, sp - fw * 0.03, sp + up * 0.09 * (1 - s_) + fw * 0.05, 0.02 * (1 - s_ * 0.5), GOLD, 5, 0.0)
+    for k, s_ in enumerate((0.16, 0.3, 0.44, 0.58)):                                    # 날 가운데 새긴 룬
+        i = int(s_ * (len(pts) - 1))
+        sp, ed, th = pts[i]
+        c = sp + (ed - sp) * 0.45
+        along = _n(pts[i + 1][0] - sp)
+        across = _n(ed - sp)
+        h = 0.05 * (1 - s_ * 0.6)
+        for sx in (1, -1):
+            o = np.array([sx * (th * 0.7 + 0.006), 0.0, 0.0])
+            a1, a2 = c - across * h + o, c + across * h + o
+            b1, b2 = a1 + along * 0.022, a2 + along * 0.022
+            q = [a1, b1, b2, a2] if sx > 0 else [a1, a2, b2, b1]
+            edge.quad(*(tuple(v) for v in q), (1, 1, 1))
+            if k % 2 == 0:                                                              # 가로획
+                m1 = c + along * (0.011 - 0.03) + o
+                m2 = m1 + along * 0.06
+                q = [m1 - across * 0.008, m2 - across * 0.008, m2 + across * 0.008, m1 + across * 0.008]
+                if sx < 0:
+                    q = [q[0], q[3], q[2], q[1]]
+                edge.quad(*(tuple(v) for v in q), (1, 1, 1))
     return shaft, blade, edge
 
 
@@ -206,15 +333,31 @@ class ReaperAssets:
                        (0.23, 0.13, 0.12, 0.0)], CLOTH_TOP)
         for sx in (-1, 1):
             _xf(chest, _sphere(0.1, CLOTH_TOP, (1.0, 0.95, 1.0), 12, 8), _T(sx * SHOULDER[0], SHOULDER[1], 0))
+        # 허리띠: 검붉은 띠와 금 버클, 앞에 늘어진 띠 끝
+        _xf(torso, _loft([(0.0, 0.282, 0.222, 0.0), (0.035, 0.29, 0.228, 0.0), (0.075, 0.287, 0.226, 0.0)], SASH), np.eye(4))
+        torso.box((0.0, 0.037, 0.232), (0.1, 0.075, 0.03), GOLD)
+        for sx, ln in ((-1, 0.36), (1, 0.28)):
+            torso.box((sx * 0.07, 0.0 - ln / 2, 0.235), (0.06, ln, 0.015), SASH)
+        # 가슴: 망토를 여미는 금 장식 두 개와 사슬
+        gems = MeshBuilder()
+        for sx in (-1, 1):
+            _xf(chest, _sphere(0.055, GOLD, (1.0, 1.0, 0.45), 12, 8), _T(sx * 0.2, 0.06, 0.22))
+            gems.sphere((sx * 0.2, 0.06, 0.245), 0.026, (1, 1, 1), 10, 7, (1.0, 1.0, 0.6))
+        for k in range(8):
+            x0, x1 = -0.16 + 0.32 * k / 8, -0.16 + 0.32 * (k + 1) / 8
+            y0, y1 = 0.06 - 0.07 * (1 - (x0 / 0.16) ** 2), 0.06 - 0.07 * (1 - (x1 / 0.16) ** 2)
+            _rod(chest, (x0, y0, 0.24 + 0.012 * (1 - (x0 / 0.16) ** 2)), (x1, y1, 0.24 + 0.012 * (1 - (x1 / 0.16) ** 2)), 0.008, GOLD, 5)
         # 두건 (머리 좌표): 어깨에 걸친 자락에서 뒤로 뾰족하게 접힌 꼭대기까지, 앞은 얼굴 자리가 뚫렸고 안은 새까맣다
-        hood = _loft([(-0.31, 0.31, 0.27, -0.03), (-0.2, 0.25, 0.25, 0.0, 0.03), (-0.06, 0.215, 0.235, 0.0, 0.05),
-                      (0.08, 0.205, 0.23, -0.01, 0.06), (0.19, 0.175, 0.2, -0.04, 0.04), (0.27, 0.12, 0.15, -0.09),
-                      (0.33, 0.06, 0.08, -0.15), (0.36, 0.0, 0.0, -0.21)], CLOTH_TOP, cut=_face_hole)
+        hood = _loft(HOOD, CLOTH_TOP, seg=HOOD_SEG, cut=_face_hole)
+        _hood_trim(hood)
         inner = MeshBuilder()
         inner.sphere((0, 0.0, 0.0), 0.2, (0, 0, 0), 14, 10, (0.95, 1.0, 1.0))
         self.torso, self.chest, self.hood, self.inner = mk(torso), mk(chest), mk(hood), mk(inner)
+        self.gems = mk(gems)
         self.upper = mk(_sleeve(1.0, 0.85, CLOTH_TOP))
-        self.fore = mk(_sleeve(0.8, 1.55, CLOTH_TOP))
+        fore = _sleeve(0.8, 1.55, CLOTH_TOP)
+        fore.cylinder((0, 0.84, 0), 1.5, 0.09, GOLD, 14, radius_top=1.6)                  # 소매 끝 금테
+        self.fore = mk(fore)
         self.elbow = mk(_sphere(1.0, CLOTH_TOP, seg=10, rings=7))
         hand = MeshBuilder()
         hand.sphere((0, 0, 0), 0.065, BONE, 10, 7, (1.0, 0.8, 1.2))
@@ -235,7 +378,7 @@ def _cloth_spec():
     rest, anchor, stiff, tf, phase, col, outward = [], [], [], [], [], [], []
     pairs, lens, tris = [], [], []
 
-    def patch(grid, aid, stiff_rows, wrap, push_out):
+    def patch(grid, aid, stiff_rows, wrap, push_out, top=CLOTH_TOP, hem=CLOTH_HEM):
         R, C = len(grid), len(grid[0])
         base = len(rest)
         idx = lambda r, c: base + r * C + (c % C)
@@ -247,7 +390,7 @@ def _cloth_spec():
                 stiff.append(stiff_rows[r])
                 tf.append(t)
                 phase.append(c * 2.399 + aid * 1.3)
-                col.append(tuple(_lerp(np.array(CLOTH_TOP), np.array(CLOTH_HEM), t ** 1.2)))
+                col.append(tuple(_lerp(np.array(top), np.array(hem), t ** 1.2)))
                 outward.append(push_out)
         cols = C if wrap else C - 1
         for r in range(R):
@@ -291,7 +434,7 @@ def _cloth_spec():
             x = (c / (C - 1) - 0.5) * 2
             row.append((x * 0.32 * (1 + 0.45 * t), 0.14 - lengths[c] * t, -0.19 - 0.06 * (1 - x * x) - 0.44 * t ** 1.1))
         grid.append(row)
-    patch(grid, 1, [1.0, 0.12, 0.05, 0.022, 0.012, 0.008, 0.006, 0.005, 0.004], False, 0.0)
+    patch(grid, 1, [1.0, 0.12, 0.05, 0.022, 0.012, 0.008, 0.006, 0.005, 0.004], False, 0.0, CAPE_TOP, CAPE_HEM)
     # 소매 끝 (손목 좌표 둘: +Y 가 손 쪽): 넓은 소매 끝이 해져 늘어진다
     for aid in (2, 3):
         R, C = 4, 7
@@ -459,6 +602,7 @@ class ReaperAnim:
         self.px = self.pz = 0.0
         self.yaw = 0.0
         self.vel = [0.0, 0.0]
+        self.mv = 0.0
         self.have_pos = False
         self.lift = 0.0
         self.pose = IDLE_POSE
@@ -613,6 +757,7 @@ class ReaperAnim:
             self._track(dt, ent)
         spd = math.hypot(self.vel[0], self.vel[1])
         mv = min(1.0, spd / 4.5)
+        self.mv += (mv - self.mv) * (1 - math.exp(-6 * dt))
         if dead:
             if not self.was_dead:
                 self.was_dead = True
@@ -714,21 +859,31 @@ class ReaperAnim:
         holding = self.t >= self.away_until
         shoulders = [(M_chest @ np.array([side * SHOULDER[0], SHOULDER[1], 0.0, 1.0]))[:3] for side in (1, -1)]
         sway = 0.04 * math.sin(self.t * 2.2)
-        free_l = (M_hold @ np.array([-0.5, 1.12 + sway, 0.3, 1.0]))[:3]          # 빈 왼손: 몸 옆으로 살짝 띄워 늘어뜨린다
+        # 빈 왼손: 서 있을 땐 몸 옆에 살짝 띄우고, 떠갈 땐 뒤로 길게 끌며 천천히 흔든다
+        mv = _smooth(self.mv * 1.3)
+        swing = 0.07 * math.sin(self.t * 3.1)
+        free_l = (M_hold @ np.array([_lerp(-0.5, -0.5, mv), _lerp(1.12 + sway, 0.93 + swing * 0.4, mv),
+                                     _lerp(0.3, -0.46 + swing, mv), 1.0]))[:3]
         if holding:
             hands = [(M_scy @ np.array([0.0, 0.0, 0.0, 1.0]))[:3], (M_scy @ np.array([0.0, GRIP2, 0.0, 1.0]))[:3]]
-            # 크게 휘두르느라 왼팔이 자루에 닿지 않으면 왼손은 놓고 몸 옆으로 (늘어나거나 몸을 뚫지 않게)
+            # 크게 휘두르느라 왼팔이 자루에 닿지 않으면 왼손은 놓는다 (늘어나거나 몸을 뚫지 않게)
             far = float(np.linalg.norm(hands[1] - shoulders[1])) - (UPPER + FORE) * 0.97
             w = _smooth(1.0 - far / 0.12)
+            if not self.act:                                # 떠갈 때는 오른손만으로 낫을 끌고 왼손은 놓는다
+                w *= 1.0 - _smooth(self.mv * 1.6)
             self.two = w if not hasattr(self, "two") else self.two + (w - self.two) * 0.35
             hands[1] = free_l + (hands[1] - free_l) * self.two
         else:
             reach = 0.4 if (self.act and self.act[0] == "W") else 0.0
             hands = [(M_hold @ np.array([0.45, 1.25 + reach * 0.4, 0.45 + reach, 1.0]))[:3],
                      (M_hold @ np.array([-0.45, 1.2 + reach * 0.3, 0.42 + reach * 0.8, 1.0]))[:3]]
+        trail = mv * (1.0 - self.two) if holding else 0.0
         self.arms = []
         for side, sh, hand in zip((1, -1), shoulders, hands):
-            pole = (root[:3, :3] @ np.array([side * 1.0, -0.45, -0.35]))      # 팔꿈치는 바깥 뒤로
+            pole = np.array([side * 1.0, -0.45, -0.35])                          # 팔꿈치는 바깥 뒤로
+            if side < 0:                                                         # 뒤로 끄는 빈 왼팔은 팔꿈치가 뒤를 향한다
+                pole = _lerp(pole, np.array([-0.3, -0.1, -1.0]), trail)
+            pole = root[:3, :3] @ pole
             elbow, end = _two_bone(sh, hand, pole)
             self.arms.append((sh, elbow, hand))
 
@@ -775,6 +930,8 @@ class ReaperAnim:
             shrink = _S(sink)
             r.draw(a.torso, _SCALE @ m["body"] @ shrink, tint=col, emissive=e)
             r.draw(a.chest, _SCALE @ m["chest"] @ shrink, tint=col, emissive=e)
+            ec = self._edge_color()
+            r.draw(a.gems, _SCALE @ m["chest"] @ shrink, tint=(ec[0], ec[1], ec[2], alpha), unlit=1.0)
             Mh = _SCALE @ m["head"] @ shrink
             r.draw(a.hood, Mh, tint=col, emissive=e)
             r.draw(a.inner, Mh, tint=(0, 0, 0, alpha), unlit=1.0)
