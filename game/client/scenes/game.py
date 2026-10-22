@@ -121,7 +121,8 @@ RANK_STATS = [("cooldown", "재사용 대기시간", "{:g}초"), ("mana", "마�
               ("baby_ad", "새끼 거미 평타 피해", "{:g}"), ("baby_hp", "새끼 거미 체력", "{:g}"), ("cocoon_hp", "고치 체력", "{:g}")]
 FLAT_STATS = [("ad_ratio", "공격력 계수", "{:.0%}"), ("damage_per_sec_ad", "초당 피해 공격력 계수", "{:.0%}"),
               ("cone_damage_ad", "부채꼴 피해 공격력 계수", "{:.0%}"), ("path_damage_ad", "지나는 길 피해 공격력 계수", "{:.0%}"), ("bonus_ad_ratio", "추가 공격력 계수", "{:.0%}"),
-              ("ap_ratio", "주문력 계수", "{:.0%}"), ("baby_ad_ratio", "새끼 거미 공격력 계수", "{:.0%}"),
+              ("ap_ratio", "주문력 계수", "{:.0%}"), ("damage_per_sec_ap", "초당 피해 주문력 계수", "{:.0%}"),
+              ("cone_damage_ap", "부채꼴 피해 주문력 계수", "{:.0%}"), ("path_damage_ap", "지나는 길 피해 주문력 계수", "{:.0%}"), ("baby_ad_ratio", "새끼 거미 공격력 계수", "{:.0%}"),
               ("range", "사거리", lambda v: f"{v * 100:g}"), ("radius", "범위 반경", lambda v: f"{v * 100:g}"), ("angle", "각도", "{:g}°"),
               ("knock_distance", "밀어내는 거리", lambda v: f"{v * 100:g}"), ("count", "투척 수", "{:g}자루"),
               ("slow", "둔화", "{:.0%}"), ("slow_duration", "둔화 시간", "{:g}초"), ("stun", "기절", "{:g}초"),

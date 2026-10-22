@@ -68,7 +68,7 @@
         54
       ],
       "ad_ratio": 0.14,
-      "damage_type": "magic",
+      "damage_type": "physical",
       "desc": "앞쪽 부채꼴로 독침 5발을 뿌립니다. 침은 한 발씩 따로 맞아 가까운 적일수록 여러 발을 맞습니다.",
       "aim": "cone",
       "angle": 60
@@ -109,7 +109,7 @@
         34
       ],
       "damage_per_sec_ad": 0.1,
-      "damage_type": "magic",
+      "damage_type": "physical",
       "desc": "지정한 곳에 4.5초간 거미줄 장판을 칩니다. 안의 적은 느려지고 초당 독 피해를 입습니다."
     },
     "E": {
