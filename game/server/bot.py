@@ -12,7 +12,7 @@ import random
 
 from ..shared import data as gamedata
 from ..shared import mapdata
-from ..shared.constants import EXHAUST_RANGE, IGNITE_RANGE, MARK_RANGE
+from ..shared.constants import EXHAUST_RANGE, IGNITE_RANGE, MARK_RANGE, TURRET_PERIOD, turret_damage
 
 POKE_TYPES = ("volley",)
 
@@ -155,7 +155,6 @@ class BotBrain:
     def quick_kill(self, sim, e):
         """포탑 아래에서도 해 볼 만한가: 쫓아갈 필요 없이 이미 닿아 있고, 지금 쓸 수 있는 스킬과 평타로 1초 안에 끝내고
         포탑에 맞으며 빠져나와도 체력이 넉넉히 남는다."""
-        from .sim import TURRET_CHAMP_DMG, TURRET_PERIOD
         c = self.c
         t = sim.time
         if c.hp / max(1.0, c.max_hp) < 0.6:
@@ -172,7 +171,7 @@ class BotBrain:
         if kill_time > 1.0:
             return False
         shots = int(math.ceil((kill_time + 2.0) / TURRET_PERIOD))        # 처치 + 사거리 밖으로 걸어 나오는 시간
-        per = (TURRET_CHAMP_DMG + 2.5 * min(30.0, t / 60.0)) * 100.0 / (100.0 + max(0.0, c.armor))
+        per = turret_damage(t) * 100.0 / (100.0 + max(0.0, c.armor))
         taken = sum(per * (1 + 0.4 * min(i, 3)) for i in range(shots))
         return c.hp - taken > c.max_hp * 0.35
 

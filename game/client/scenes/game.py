@@ -11,6 +11,8 @@
 - 시야: 아군 주변만 보이고(전장의 안개), 부쉬 안의 적은 같은 부쉬에 들어가야 보인다
 - Y: 카메라 고정/자유 전환 (처음엔 자유 카메라), F6~F9: 테스트 치트 (체력/마나/쿨타임/레벨), Space: 내 챔피언으로 카메라 이동, 마우스 휠: 줌
 - Enter: 채팅 (Enter 로 보내기, Esc 로 취소). 킬·포탑 파괴 같은 알림도 채팅창에 올라온다
+- 좌클릭: 챔피언·미니언·구조물을 고르면 왼쪽 위에 체력·능력치 정보창 (땅을 누르면 닫힌다)
+- 항복: 채팅에 /ff (또는 /항복), ESC 설정 창의 항복 버튼. 투표는 오른쪽 찬성/반대 버튼
 """
 import math
 import time
@@ -23,8 +25,8 @@ from ...shared import data as gamedata
 from ...shared import mapdata
 from ...shared.spells import DEFAULT_SPELLS, SPELLS
 from ...shared.constants import (
-    BLUE, FLASH_COOLDOWN, FLASH_RANGE, INVENTORY_SLOTS, MARK_COOLDOWN, MARK_RANGE, MARK_RECAST_TIME, RECALL_TIME, RED,
-    SELL_RATIO, SIGHT,
+    BLUE, FLASH_COOLDOWN, FLASH_RANGE, INVENTORY_SLOTS, MARK_COOLDOWN, MARK_RANGE, MARK_RECAST_TIME, MINION_RESIST,
+    MINION_STATS, RECALL_TIME, RED, SELL_RATIO, SIGHT, SURRENDER_VOTE_TIME, TURRET_PERIOD, turret_damage,
 )
 from .. import ui
 from ..app import HEIGHT, WIDTH, Scene
@@ -100,6 +102,13 @@ STAT_FALLBACK = {"ad": ((230, 140, 60), "공"), "ap": ((160, 110, 240), "주"), 
                  "crit": ((235, 90, 80), "치")}
 MINIMAP = pygame.Rect(1000, 606, 270, 108)
 TEAMFRAME = pygame.Rect(1000, 392, 270, 208)      # 미니맵 위 팀 프로필 (아군 체력 / 적 사망 표시)
+TARGET_FRAME = pygame.Rect(12, 12, 300, 0)        # 좌클릭으로 고른 유닛 정보창 (왼쪽 위, 높이는 내용에 따라)
+FF_PANEL = pygame.Rect(1000, 300, 270, 84)        # 항복 투표창 (팀 프로필 위)
+FF_COMMANDS = ("/ff", "/항복", "/surrender")
+MINION_TYPE_OF = {0: "melee", 1: "caster", 2: "cannon", 3: "super", 4: "spiderling"}
+MINION_NAMES = {0: "근거리 미니언", 1: "원거리 미니언", 2: "공성 미니언", 3: "슈퍼 미니언", 4: "새끼 거미"}
+STRUCT_NAMES = {"inner": "포탑", "nexus_t1": "넥서스 포탑", "nexus_t2": "넥서스 포탑", "inhib": "억제기", "nexus": "넥서스"}
+STRUCT_RESIST = 40.0
 ABILITY_X = {"Q": 392, "W": 454, "E": 516, "R": 578}
 SPELL_X = {"D": 652, "F": 702}
 
@@ -266,6 +275,17 @@ def ability_details(ab):
     return rows
 
 
+def draw_stat_icon(surf, key, rect):
+    """능력치 아이콘 (assets/ui/stats/<키>.png, 없으면 색 사각형 + 글자)."""
+    icon = ui.icon(f"assets/ui/stats/{key}.png", rect.width)
+    if icon:
+        surf.blit(icon, rect)
+    else:
+        col, ch = STAT_FALLBACK[key]
+        pygame.draw.rect(surf, col, rect, border_radius=4)
+        ui.text(surf, ch, rect.center, 12, (20, 20, 30), anchor="center", bold=True, shadow=False)
+
+
 def draw_item(surf, iid, rect, font_size=14):
     """아이템 아이콘 (assets/items/<id>.png). 파일이 없으면 색 사각형 + 첫 글자."""
     rect = pygame.Rect(rect)
@@ -389,6 +409,9 @@ class GameScene(Scene):
         self.rmb_repeat = 0.0
         self.hover = None
         self.hover_slot = None
+        self.selected = None        # 좌클릭으로 고른 유닛 (kind, id) — 왼쪽 위 정보창
+        self.ff = None              # 우리 팀 항복 투표 [찬성, 반대, 필요, 인원, 남은 초, [[id, 표], ...]]
+        self.ff_rects = []          # 항복 투표 찬성/반대 버튼
         self.click_marker = None
         self.move_dest = None       # 이동 목적지 (도착할 때까지 바닥에 표시)
         self.minimap_drag = False   # 미니맵을 좌클릭한 채로 끌면 카메라 이동
@@ -473,6 +496,11 @@ class GameScene(Scene):
         cam.pitch = math.radians(56)
         cam.yaw = 0.0
         cam.distance = self.zoom
+
+    def request_surrender(self):
+        """항복 투표를 열거나(열려 있으면) 찬성한다. 설정 창의 항복 버튼도 이걸 부른다."""
+        if self.winner is None:
+            self.send_cmd(c="surrender", yes=True)
 
     def on_enter(self):
         # 텍스트 입력(IME)이 켜져 있으면 한글 모드에서 스킬 키가 입력기로 빠져 나가므로 끈다
@@ -581,6 +609,7 @@ class GameScene(Scene):
         self.server_time = s["time"]
         self.score = s["score"]
         self.wave_in = s.get("wave", 0)
+        self.ff = s.get("ff")
 
         seen = set()
         for d in s["ch"]:
@@ -715,6 +744,8 @@ class GameScene(Scene):
             self.add_chat([(ev["text"], ui.GOLD)])
         elif e == "vo":
             self.vo_event(ev)
+        elif e == "ff":
+            self.ff_event(ev)
         elif e == "levelup":
             self.sfx_unit(ev["d"], "levelup", 1.0 if ev["d"] == self.my_id else 0.45)
             pos = self.entity_pos(ev["d"])
@@ -732,6 +763,21 @@ class GameScene(Scene):
                                       "t": now, "dur": 0.9, "size": 16})
         elif e == "fx":
             self.handle_fx(ev["fx"], ev)
+
+    def ff_event(self, ev):
+        k = ev.get("k")
+        if k == "start":
+            info = self.champ_info.get(ev.get("d"), {})
+            self.add_chat([(info.get("n", ""), ui.TEAM_UI.get(info.get("tm"), ui.TEXT)),
+                           (" 님이 항복 투표를 시작했습니다.", ui.GOLD)])
+            self.sfx("ui_notify")
+        elif k == "wait":
+            mm, ss = divmod(int(ev.get("v", 0)), 60)
+            self.add_chat([(f"항복 투표는 {mm}:{ss:02d} 후에 열 수 있습니다.", ui.GOLD)])
+        elif k == "pass":
+            self.add_chat([(f"항복 투표가 가결되었습니다. ({ev['y']} 찬성 / {ev['n']} 반대)", ui.GOLD)])
+        elif k == "fail":
+            self.add_chat([(f"항복 투표가 부결되었습니다. ({ev['y']} 찬성 / {ev['n']} 반대)", ui.GOLD)])
 
     def handle_fx(self, kind, ev):
         """서버가 보낸 효과 이벤트 -> 화면 효과. ev["tm"] (스킬을 쓴 팀) 으로 아군 파랑 / 적 빨강을 정하고,
@@ -838,7 +884,9 @@ class GameScene(Scene):
 
     def close_chat(self, send=False):
         text = self.chat_in.value.strip()
-        if send and text:
+        if send and text.lower() in FF_COMMANDS:
+            self.request_surrender()
+        elif send and text:
             self.app.send({"t": "chat", "text": text})
         self.chat_open = False
         self.chat_in.focused = False
@@ -1415,6 +1463,8 @@ class GameScene(Scene):
                 elif self.amove_pending:
                     # A + 좌클릭: 적을 누르면 그 적을 공격, 땅을 누르면 공격 이동
                     self.right_click(attack_move=True)
+                else:
+                    self.selected = self.find_hover()          # 롤처럼 유닛을 고르면 왼쪽 위에 정보창, 땅을 누르면 닫힘
             elif e.button == 3:
                 self.aiming = None
                 if MINIMAP.collidepoint(e.pos):
@@ -1471,6 +1521,13 @@ class GameScene(Scene):
         self.held.clear()
 
     def click_ui(self, pos):
+        for yes, rect in self.ff_rects:
+            if rect.collidepoint(pos):
+                self.audio.play("ui_click")
+                self.send_cmd(c="surrender", yes=yes)
+                return True
+        if self.ff and FF_PANEL.collidepoint(pos):
+            return True
         for slot, rect in self.levelup_rects:
             if rect.collidepoint(pos):
                 self.send_cmd(c="level", slot=slot)
@@ -2273,6 +2330,8 @@ class GameScene(Scene):
         self.draw_announces(surf)
         self.draw_hud(surf)
         self.draw_team_frames(surf)
+        self.draw_target_frame(surf)
+        self.draw_surrender(surf)
         self.draw_minimap(surf)
         self.draw_pings_2d(surf)
         self.draw_ping_wheel(surf)
@@ -2618,14 +2677,7 @@ class GameScene(Scene):
         for i, (key, label, value) in enumerate(STAT_ICONS):
             x = 168 + (i % 2) * 64
             y = 614 + (i // 2) * 24
-            icon_rect = pygame.Rect(x, y, 20, 20)
-            icon = ui.icon(f"assets/ui/stats/{key}.png", 20)
-            if icon:
-                surf.blit(icon, icon_rect)
-            else:
-                col, ch = STAT_FALLBACK[key]
-                pygame.draw.rect(surf, col, icon_rect, border_radius=4)
-                ui.text(surf, ch, icon_rect.center, 12, (20, 20, 30), anchor="center", bold=True, shadow=False)
+            draw_stat_icon(surf, key, pygame.Rect(x, y, 20, 20))
             ui.text(surf, str(value(st)), (x + 26, y + 10), 13, anchor="midleft", shadow=False)
             if pygame.Rect(x, y, 60, 20).collidepoint(mouse):
                 self.stat_tip = (mouse, key, label, me)
@@ -2754,6 +2806,137 @@ class GameScene(Scene):
         x = (sx - MINIMAP.x - MM_PAD) / (MINIMAP.width - 2 * MM_PAD) * (2 * MINIMAP_X) - MINIMAP_X
         z = (sy - MINIMAP.centery) * (2 * MINIMAP_X) / (MINIMAP.width - 2 * MM_PAD)
         return mapdata.clamp_to_map(x, z)
+
+    # ---- 좌클릭 대상 정보창 (왼쪽 위)
+    def target_info(self):
+        """고른 유닛의 정보 {"name", "sub", "team", "hp", "mhp", "mp", "mmp", "lv", "champ", "stats", "items"}.
+        사라졌거나 죽었으면 None (고른 것도 푼다)."""
+        if not self.selected:
+            return None
+        kind, eid = self.selected
+        info = None
+        if kind == "champion":
+            e = self.champs.get(eid)
+            d = e.d if e else None
+            if d and e.visible and not d["dead"]:
+                ci = self.champ_info[eid]
+                data = gamedata.champion(ci["c"]) or {}
+                st = d["s"]
+                info = {"name": data.get("name", ci["c"]), "sub": ci["n"], "team": ci["tm"], "champ": ci["c"],
+                        "hp": d["hp"], "mhp": d["mhp"], "mp": d["mp"], "mmp": d["mmp"], "lv": d["lv"],
+                        "stats": [(key, value(st)) for key, _, value in STAT_ICONS], "items": d["it"],
+                        "color": data.get("color", (160, 170, 190))}
+        elif kind == "minion":
+            e = self.minions.get(eid)
+            if e and e.d:
+                row = e.d
+                hp, ad, rng, aspd, ms, *_ = MINION_STATS[MINION_TYPE_OF[row[1]]]
+                ar, mr = MINION_RESIST.get(MINION_TYPE_OF[row[1]], (0.0, 0.0))
+                info = {"name": MINION_NAMES[row[1]], "team": row[2], "hp": row[6], "mhp": row[7],
+                        "stats": [("ad", round(row[9] if len(row) > 9 else ad)), ("armor", round(ar)), ("mr", round(mr)),
+                                  ("attack_speed", f"{aspd:.2f}"), ("move_speed", round(ms * 100))]}
+        elif kind == "structure":
+            st = self.struct_state.get(eid)
+            if st and st[2]:
+                sd = self.structs[eid]
+                stats = [("armor", round(STRUCT_RESIST)), ("mr", round(STRUCT_RESIST))]
+                if sd["k"] == "turret":
+                    stats = [("ad", round(turret_damage(self.server_time))), ("attack_speed", f"{1.0 / TURRET_PERIOD:.2f}")] + stats
+                info = {"name": STRUCT_NAMES.get(sd["key"], sd["k"]), "team": sd["tm"], "hp": st[1], "mhp": sd["mhp"],
+                        "stats": stats}
+        elif kind == "anchor":
+            row = next((r for r, _ in self.anchors if r[0] == eid), None)
+            if row:
+                info = {"name": "새끼 거미 고치", "team": row[1], "hp": row[4], "mhp": row[8] if len(row) > 8 else row[4],
+                        "stats": []}
+        if info is None:
+            self.selected = None
+        return info
+
+    def draw_target_frame(self, surf):
+        info = self.target_info()
+        if info is None:
+            return
+        team_col = ui.TEAM_UI.get(info["team"], ui.TEXT)
+        is_champ = "champ" in info
+        stats = info["stats"]
+        rows = (len(stats) + 3) // 4
+        h = 64 + (16 if is_champ else 0) + rows * 24 + (38 if is_champ else 0)
+        r = pygame.Rect(TARGET_FRAME.x, TARGET_FRAME.y, TARGET_FRAME.w, h)
+        ui.panel(surf, r, (14, 20, 34, 225), ui.BORDER)
+        # 초상화 / 팀색 표시
+        pc = (r.x + 34, r.y + 34)
+        if is_champ:
+            draw_round_portrait(surf, info["champ"], pc, 24, team_col, color=info["color"])
+            lp = (pc[0] + 17, pc[1] + 17)
+            pygame.draw.circle(surf, (12, 16, 26), lp, 10)
+            pygame.draw.circle(surf, team_col, lp, 10, 1)
+            ui.text(surf, str(info["lv"]), lp, 12, anchor="center", bold=True, shadow=False)
+        else:
+            pygame.draw.circle(surf, (24, 30, 46), pc, 24)
+            pygame.draw.circle(surf, team_col, pc, 24, 2)
+            ui.text(surf, info["name"][0], pc, 20, team_col, anchor="center", bold=True)
+        # 이름
+        x0 = r.x + 68
+        name_r = ui.text(surf, info["name"], (x0, r.y + 8), 16, team_col, bold=True)
+        if info.get("sub"):
+            ui.text(surf, info["sub"], (name_r.right + 8, r.y + 10), 13, ui.TEXT_DIM)
+        # 체력 / 마나
+        bw = r.right - 10 - x0
+        hb = pygame.Rect(x0, r.y + 32, bw, 14)
+        ratio = info["hp"] / max(1, info["mhp"])
+        ui.bar(surf, hb, ratio, (80, 200, 100) if info["team"] == self.my_team else (220, 70, 60))
+        ui.text(surf, f"{max(0, round(info['hp']))} / {round(info['mhp'])}", hb.center, 12, anchor="center", bold=True)
+        y = r.y + 64
+        if is_champ:
+            mb = pygame.Rect(x0, r.y + 48, bw, 12)
+            ui.bar(surf, mb, info["mp"] / max(1, info["mmp"]), (70, 130, 255))
+            ui.text(surf, f"{max(0, round(info['mp']))} / {round(info['mmp'])}", mb.center, 11, anchor="center", bold=True)
+            y += 16
+        # 능력치 (4칸씩)
+        for i, (key, value) in enumerate(stats):
+            x = r.x + 10 + (i % 4) * 72
+            yy = y + (i // 4) * 24
+            draw_stat_icon(surf, key, pygame.Rect(x, yy, 20, 20))
+            ui.text(surf, str(value), (x + 25, yy + 10), 13, anchor="midleft", shadow=False)
+        # 아이템
+        if is_champ:
+            yy = y + rows * 24 + 4
+            for i in range(INVENTORY_SLOTS):
+                cell = pygame.Rect(r.x + 10 + i * 35, yy, 30, 30)
+                pygame.draw.rect(surf, (24, 30, 46), cell, border_radius=4)
+                if i < len(info["items"]) and info["items"][i]:
+                    draw_item(surf, info["items"][i], cell, 12)
+                pygame.draw.rect(surf, ui.BORDER, cell, 1, border_radius=4)
+
+    # ---- 항복 투표 (오른쪽)
+    def draw_surrender(self, surf):
+        self.ff_rects = []
+        ff = self.ff
+        if not ff or self.winner is not None:
+            return
+        yes, no, need, total, left, votes = ff
+        r = FF_PANEL
+        ui.panel(surf, r, (14, 20, 34, 225), ui.BORDER)
+        ui.text(surf, "항복 투표", (r.x + 12, r.y + 8), 15, ui.GOLD, bold=True)
+        ui.text(surf, f"{math.ceil(left)}초", (r.right - 12, r.y + 8), 14, ui.TEXT_DIM, anchor="topright")
+        # 표: 찬성 초록, 반대 빨강, 아직 회색
+        for i, (cid, v) in enumerate(votes):
+            c = (r.x + 20 + i * 22, r.y + 42)
+            col = (90, 210, 110) if v > 0 else (230, 80, 70) if v < 0 else (70, 76, 92)
+            pygame.draw.circle(surf, col, c, 8)
+            pygame.draw.circle(surf, (12, 16, 26), c, 8, 1)
+        ui.text(surf, f"{yes}/{need}", (r.x + 20 + len(votes) * 22, r.y + 42), 13, anchor="midleft")
+        mine = next((v for cid, v in votes if cid == self.my_id), 0)
+        if mine == 0:
+            mouse = ui.mouse_pos()
+            for k, (yes_vote, label, col) in enumerate(((True, "찬성", (60, 140, 80)), (False, "반대", (150, 60, 55)))):
+                br = pygame.Rect(r.right - 132 + k * 64, r.y + 30, 58, 26)
+                pygame.draw.rect(surf, tuple(min(255, c + 25) for c in col) if br.collidepoint(mouse) else col, br, border_radius=5)
+                ui.text(surf, label, br.center, 14, anchor="center", bold=True)
+                self.ff_rects.append((yes_vote, br))
+        bar = pygame.Rect(r.x + 12, r.bottom - 14, r.w - 24, 5)
+        ui.bar(surf, bar, left / SURRENDER_VOTE_TIME, (230, 200, 120))
 
     def portrait(self, surf, rect, cid, level, dead, ring):
         """롤식 팀 프로필 아이콘: 원형 초상화, 팀색 테두리, 좌하단 레벨, 죽으면 흑백."""

@@ -309,6 +309,9 @@ class GameServer:
                 # 게임 중 나가면 챔피언은 명령 없이 그 자리에 가만히 남는다 (AI 가 대신하지 않음)
                 m.client = None
                 m.left = True
+                room.sim.left_keys.add(m.key)
+                for team in (BLUE, RED):
+                    room.sim.check_surrender(team)
                 ch = room.sim.by_key.get(m.key)
                 if ch:
                     ch.clear_orders()

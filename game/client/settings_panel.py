@@ -26,6 +26,13 @@ class SettingsPanel:
         from .app import HEIGHT, WIDTH
         return pygame.Rect(WIDTH // 2 - w // 2, max(10, (HEIGHT - h) // 2 - 10), w, h)
 
+    def surrender_fn(self):
+        """인게임이면 항복 투표 함수, 아니면 None."""
+        scene = self.app.scene
+        if scene is None or getattr(scene, "winner", 0) is not None:
+            return None
+        return getattr(scene, "request_surrender", None)
+
     def sfx(self, name):
         self.app.audio.play(name)
 
@@ -71,6 +78,11 @@ class SettingsPanel:
                         if self.tab != kind[4:]:
                             self.tab = kind[4:]
                             self.sfx("ui_select")
+                    elif kind == "surrender":
+                        fn = self.surrender_fn()
+                        if fn:
+                            fn()
+                        self.close()
                     elif kind == "reset":
                         binds.reset()
                         self.sfx("ui_click")
@@ -141,6 +153,8 @@ class SettingsPanel:
         buttons = [("close", "닫기", pygame.Rect(p.right - 144, p.bottom - 52, 120, 36))]
         if self.tab == "keys":
             buttons.insert(0, ("reset", "기본값", pygame.Rect(body.x, p.bottom - 52, 120, 36)))
+        if self.surrender_fn():
+            buttons.append(("surrender", "항복", pygame.Rect(p.x + 20, p.bottom - 52, 124, 36)))
         for kind, label, rect in buttons:
             pygame.draw.rect(surf, (40, 60, 95) if rect.collidepoint(mouse) else (28, 38, 58), rect, border_radius=6)
             pygame.draw.rect(surf, ui.BORDER, rect, 1, border_radius=6)

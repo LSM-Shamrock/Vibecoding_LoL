@@ -2,7 +2,7 @@
 import math
 
 from ..shared import data as gamedata
-from ..shared.constants import PLATE_GOLD, START_GOLD, START_LEVEL, TURRET_PLATES
+from ..shared.constants import MINION_RESIST, MINION_STATS, PLATE_GOLD, START_GOLD, START_LEVEL, TURRET_PLATES
 from ..shared.spells import DEFAULT_SPELLS, valid_pair
 
 
@@ -169,6 +169,7 @@ class Champion(Unit):
         buff_ms = sum(b.get("move_speed_pct", 0.0) for b in self.buffs)
 
         base_ad = s["ad"] + s["ad_per_level"] * lv
+        base_ap = s.get("ap", 0) + s.get("ap_per_level", 0) * lv     # 마법사 챔피언의 기본 주문력
         old_max_hp = getattr(self, "max_hp", 0)
         old_max_mana = getattr(self, "max_mana", 0)
         st = {
@@ -179,7 +180,7 @@ class Champion(Unit):
             "base_ad": base_ad,
             "bonus_ad": item_stats.get("ad", 0),
             "ad": base_ad + item_stats.get("ad", 0),
-            "ap": item_stats.get("ap", 0),
+            "ap": base_ap + item_stats.get("ap", 0),
             "armor": s["armor"] + s["armor_per_level"] * lv + item_stats.get("armor", 0),
             "mr": s["mr"] + s["mr_per_level"] * lv + item_stats.get("mr", 0),
             "attack_speed": min(2.5, s["attack_speed"] * (1 + s["attack_speed_per_level"] * lv
@@ -194,7 +195,7 @@ class Champion(Unit):
         self.stats = st
         # 툴팁용 "기본" 능력치 (레벨 성장분까지 포함, 아이템·버프는 제외 = 롤의 기본+추가 표시)
         self.base_stats = {
-            "ad": base_ad, "ap": 0.0, "ar": s["armor"] + s["armor_per_level"] * lv,
+            "ad": base_ad, "ap": base_ap, "ar": s["armor"] + s["armor_per_level"] * lv,
             "mr": s["mr"] + s["mr_per_level"] * lv,
             "aspd": s["attack_speed"] * (1 + s["attack_speed_per_level"] * lv),
             "ms": s["move_speed"] * 100, "ah": 0.0, "cr": 0.0}
@@ -229,14 +230,6 @@ class Champion(Unit):
         self.windup = None
 
 
-MINION_TYPES = {
-    #           hp,  ad, 사거리, 공속, 이속, 반경, 골드, 경험치, 원거리
-    "melee":  (480, 4.9, 1.2, 1.25, 3.25, 0.45, 21, 60, False),
-    "caster": (300, 9.0, 5.0, 0.67, 3.25, 0.40, 14, 30, True),
-    "cannon": (920, 15.8, 3.0, 1.00, 3.25, 0.60, 60, 93, True),
-    "super":  (1600, 41, 1.7, 0.85, 3.25, 0.75, 40, 97, False),
-    "spiderling": (80, 0, 3.2, 1.0, 3.3, 0.34, 0, 0, True),      # 거미 여왕 E: 고치에서 나오는 새끼 거미 (거미 여왕과 같은 거미줄 평타)
-}
 MINION_CODES = {"melee": 0, "caster": 1, "cannon": 2, "super": 3, "spiderling": 4}
 TURRET_MINION_DMG = {"melee": 0.45, "caster": 0.70, "cannon": 0.14, "super": 0.07, "spiderling": 0.5}
 
@@ -245,12 +238,12 @@ class Minion(Unit):
     kind = "minion"
 
     def __init__(self, uid, team, x, z, mtype, minutes):
-        hp, ad, rng, aspd, ms, radius, gold, xp, ranged = MINION_TYPES[mtype]
+        hp, ad, rng, aspd, ms, radius, gold, xp, ranged = MINION_STATS[mtype]
         super().__init__(uid, team, x, z, radius)
         self.mtype = mtype
         self.max_hp = self.hp = hp * (1 + 0.05 * minutes)
         self.ad = ad * (1 + 0.04 * minutes)
-        self.armor = 0.0 if mtype != "super" else 30.0
+        self.armor, self.mr = MINION_RESIST.get(mtype, (0.0, 0.0))
         self.attack_range = rng
         self.attack_speed = aspd
         self.move_speed = ms

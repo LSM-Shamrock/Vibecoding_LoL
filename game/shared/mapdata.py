@@ -81,7 +81,7 @@ def structure_layout():
 
 RELIC_POSITIONS = [(-24.0, 5.0), (-12.0, -5.0), (12.0, 5.0), (24.0, -5.0)]
 
-TURRET_RANGE = 7.75
+TURRET_RANGE = 7.5
 
 # 부쉬(수풀): (x, z, 반지름 x, 반지름 z) 타원. 안에 있는 유닛은 같은 부쉬 안에 있는 적에게만 보인다.
 BUSHES = [

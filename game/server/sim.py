@@ -23,8 +23,9 @@ from ..shared.constants import (
     IGNITE_TIME, FOUNTAIN_HEAL_PCT, FOUNTAIN_LASER_DPS, FOUNTAIN_LASER_RADIUS, FOUNTAIN_RADIUS, INHIBITOR_RESPAWN,
     INVENTORY_SLOTS, MARK_COOLDOWN, MINION_GOLD_RANGE, MARK_DASH_SPEED, MARK_RANGE, MARK_RECAST_TIME,
     MARK_SPEED, MAX_LEVEL, PASSIVE_GOLD_PER_SEC, PASSIVE_XP_PER_SEC, PLATE_SHARE_RANGE, RECALL_TIME, RECALL_TIME_HOME, RED,
-    RELIC_FIRST_SPAWN, RELIC_HEAL_PCT, RELIC_RADIUS, RELIC_RESPAWN, SELL_RATIO, SIGHT, WAVE_INTERVAL, XP_SHARE_RANGE,
-    death_timer, kill_bounty, xp_to_next,
+    RELIC_FIRST_SPAWN, RELIC_HEAL_PCT, RELIC_RADIUS, RELIC_RESPAWN, SELL_RATIO, SIGHT, SURRENDER_RATIO, SURRENDER_RETRY,
+    SURRENDER_TIME, SURRENDER_VOTE_TIME, TURRET_PERIOD, WAVE_INTERVAL, XP_SHARE_RANGE, death_timer, turret_damage,
+    kill_bounty, xp_to_next,
 )
 from ..shared.spells import SPELLS
 from . import abilities
@@ -36,8 +37,6 @@ from .entities import (
 MINION_AGGRO = 7.0
 MULTIKILL_WINDOW = 10.0          # 이 시간 안에 이어서 처치하면 더블킬·트리플킬 …
 INHIBITOR_SOON = 15.0           # 억제기 재생성 이만큼 전에 '곧 재생성' 안내
-TURRET_PERIOD = 0.85
-TURRET_CHAMP_DMG = 128.0        # 포탑 → 챔피언 기본 피해 (+분당 2.5, 연속 공격 시 증가)
 SLOTS = ("Q", "W", "E", "R")
 
 
@@ -85,6 +84,9 @@ class Simulation:
         self.visible = {BLUE: set(), RED: set()}    # 팀별로 보이는 적 유닛 id
         self._observers = {BLUE: [], RED: []}
         self.gone_minions = []      # 지난 스냅샷 이후 죽은 미니언 (클라이언트 사라짐 효과용)
+        self.ff_votes = {BLUE: None, RED: None}     # 팀별 항복 투표 {"until", "yes": set, "no": set}
+        self.ff_ready_at = {BLUE: SURRENDER_TIME, RED: SURRENDER_TIME}
+        self.left_keys = set()      # 게임 중 나간 사람 (항복 투표 인원에서 뺀다)
 
         for info in mapdata.structure_layout():
             s = Structure(self.new_id(), info)
@@ -582,6 +584,8 @@ class Simulation:
                 self.swap_items(c, int(msg["a"]), int(msg["b"]))
             elif cmd == "ping":
                 self.ping(c, float(msg["x"]), float(msg["z"]), str(msg.get("k", "alert")))
+            elif cmd == "surrender":
+                self.surrender_vote(c, bool(msg.get("yes", True)))
             elif c.dead:
                 return
             elif cmd == "recall":
@@ -606,6 +610,59 @@ class Simulation:
                 self.cast_spell(c, msg["slot"], float(msg["x"]), float(msg["z"]))
         except (KeyError, TypeError, ValueError):
             pass
+
+    # ------------------------------------------------------------------ 항복
+    def ff_voters(self, team):
+        return [c for c in self.champions.values()
+                if c.team == team and not c.is_bot and c.member_key not in self.left_keys]
+
+    def ff_need(self, team):
+        return max(1, math.ceil(len(self.ff_voters(team)) * SURRENDER_RATIO - 1e-9))
+
+    def surrender_vote(self, c, yes):
+        """항복 투표: 열린 투표가 없으면 새로 연다(연 사람은 찬성), 있으면 찬성/반대를 바꾼다."""
+        if c.is_bot:
+            return
+        team, t = c.team, self.time
+        vote = self.ff_votes[team]
+        if vote is None:
+            if not yes:
+                return
+            if t < self.ff_ready_at[team]:
+                self.event(e="ff", tm=team, k="wait", v=math.ceil(self.ff_ready_at[team] - t))
+                return
+            vote = self.ff_votes[team] = {"until": t + SURRENDER_VOTE_TIME, "yes": set(), "no": set()}
+            self.event(e="ff", tm=team, k="start", d=c.id)
+        vote["no" if yes else "yes"].discard(c.id)
+        vote["yes" if yes else "no"].add(c.id)
+        self.check_surrender(team)
+
+    def check_surrender(self, team):
+        vote = self.ff_votes[team]
+        if vote is None or self.winner is not None:
+            return
+        voters = {c.id for c in self.ff_voters(team)}
+        yes, no = len(vote["yes"] & voters), len(vote["no"] & voters)
+        need = self.ff_need(team)
+        if yes >= need:
+            self.ff_votes[team] = None
+            self.event(e="ff", tm=team, k="pass", y=yes, n=no)
+            self.winner = other(team)
+            self.event(e="victory", team=self.winner)
+        elif len(voters) - no < need or self.time >= vote["until"]:
+            self.ff_votes[team] = None
+            self.ff_ready_at[team] = self.time + SURRENDER_RETRY
+            self.event(e="ff", tm=team, k="fail", y=yes, n=no)
+
+    def ff_row(self, team):
+        """스냅샷용 투표 상태 [찬성, 반대, 필요, 인원, 남은 초, [[챔피언 id, 표(1 찬성 / -1 반대 / 0)], ...]] 또는 None."""
+        vote = self.ff_votes[team]
+        if vote is None:
+            return None
+        voters = {c.id for c in self.ff_voters(team)}
+        return [len(vote["yes"] & voters), len(vote["no"] & voters), self.ff_need(team), len(voters),
+                round(max(0.0, vote["until"] - self.time), 1),
+                [[i, 1 if i in vote["yes"] else -1 if i in vote["no"] else 0] for i in sorted(voters)]]
 
     def locked(self, c):
         """몸을 쓰는 스킬 동작 중이라 이동·공격·스킬·주문을 할 수 없는가 (이무기 E 등)."""
@@ -932,6 +989,10 @@ class Simulation:
             return
         self.time += dt
         t = self.time
+        for team in (BLUE, RED):
+            self.check_surrender(team)
+            if self.winner is not None:
+                return
         self.help_calls = [h for h in self.help_calls if h[0] > t]
         self.run_scheduled()
 
@@ -1442,7 +1503,7 @@ class Simulation:
             return
         s.attack_ready_at = t + TURRET_PERIOD
         if isinstance(target, Champion):
-            dmg = (TURRET_CHAMP_DMG + 2.5 * min(30.0, t / 60.0)) * (1 + 0.4 * min(s.ramp, 3))
+            dmg = turret_damage(t) * (1 + 0.4 * min(s.ramp, 3))
             shot_style = "turret_shot" if s.ramp == 0 else ("turret_shot_2" if s.ramp < 3 else "turret_shot_3")
             s.ramp += 1
 
@@ -1559,8 +1620,8 @@ class Simulation:
         if e in ("dmg", "gold", "heal"):
             keys = ("s", "d") if e == "dmg" else ("d",)
             return any((ch := self.champions.get(ev.get(k))) is not None and ch.team == team for k in keys)
-        if e == "ping":
-            return ev.get("tm") == team                     # 핑은 같은 팀에게만
+        if e in ("ping", "ff"):
+            return ev.get("tm") == team                     # 핑·항복 투표는 같은 팀에게만
         if e in ("cast", "levelup"):
             u = self.champions.get(ev.get("d"))
             return u is not None and self.can_see(team, u)
@@ -1628,7 +1689,7 @@ class Simulation:
             obs = self._observers[team]
             vis = self.visible[team]
             minions = [[m.id, MINION_CODES[m.mtype], m.team, round(m.x, 2), round(m.z, 2), round(m.facing, 2),
-                        round(m.hp), round(m.max_hp), m.anim]
+                        round(m.hp), round(m.max_hp), m.anim, round(m.ad, 1)]
                        for m in self.minions.values() if m.team == team or m.id in vis]
             projs = [[p.id, p.style, p.team, round(p.x, 2), round(p.z, 2), round(p.dx, 2), round(p.dz, 2)]
                      for p in self.projectiles.values() if p.team == team or self.seen_by(obs, p.x, p.z)]
@@ -1651,6 +1712,7 @@ class Simulation:
                 "gone": self.gone_minions,
                 "ev": [ev for ev in self.events if self.event_visible(team, ev)],
                 "wave": round(max(0.0, self.next_wave_at - t), 1),
+                "ff": self.ff_row(team),
             }
         self.events = []
         self.gone_minions = []

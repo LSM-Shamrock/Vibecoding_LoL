@@ -47,6 +47,35 @@ RECALL_TIME_HOME = 6.0    # ... 우리 진영(맵 절반 기준 우리 우물 �
 FOUNTAIN_LASER_RADIUS = 9.0
 FOUNTAIN_LASER_DPS = 1200.0
 
+# ---- 포탑 (롤 기준) ----
+TURRET_PERIOD = 1.2             # 공격 속도 0.833
+TURRET_CHAMP_DMG = 152.0        # 포탑 → 챔피언 기본 피해 (+분당 9, 14분에 278 까지, 연속 공격 시 40% 씩 최대 120% 증가)
+TURRET_DMG_PER_MIN = 9.0
+TURRET_DMG_MAX_MIN = 14.0
+
+
+def turret_damage(t):
+    """경기 시간 t(초)의 포탑 기본 피해."""
+    return TURRET_CHAMP_DMG + TURRET_DMG_PER_MIN * min(TURRET_DMG_MAX_MIN, t / 60.0)
+
+
+# ---- 미니언 (롤 기준, 사거리 100 유닛 = 1) ----
+MINION_STATS = {
+    #           hp,  ad, 사거리, 공속, 이속, 반경, 골드, 경험치, 원거리
+    "melee":  (477, 12.0, 1.1, 1.25, 3.25, 0.45, 21, 60, False),
+    "caster": (296, 24.0, 5.5, 0.667, 3.25, 0.40, 14, 30, True),
+    "cannon": (912, 41.0, 3.0, 1.00, 3.25, 0.60, 60, 93, True),
+    "super":  (1600, 230.0, 1.7, 0.85, 3.25, 0.75, 40, 97, False),
+    "spiderling": (80, 0, 3.2, 1.0, 3.3, 0.34, 0, 0, True),      # 거미 여왕 E: 고치에서 나오는 새끼 거미 (거미 여왕과 같은 거미줄 평타)
+}
+MINION_RESIST = {"super": (100.0, -30.0)}      # (방어력, 마법 저항력), 없으면 0
+
+# ---- 항복 ----
+SURRENDER_TIME = 480.0          # 이 시간(초)부터 항복 투표를 열 수 있다
+SURRENDER_VOTE_TIME = 60.0
+SURRENDER_RETRY = 180.0         # 투표가 부결되면 같은 팀은 이만큼 기다려야 다시 열 수 있다
+SURRENDER_RATIO = 2.0 / 3.0     # 팀 사람 중 이 비율 이상이 찬성하면 항복
+
 RELIC_FIRST_SPAWN = 60.0
 RELIC_RESPAWN = 40.0
 RELIC_HEAL_PCT = 0.15
