@@ -14,6 +14,7 @@ from ..shared import data as gamedata
 from ..shared import mapdata
 from ..shared.constants import EXHAUST_RANGE, IGNITE_RANGE, MARK_RANGE, TURRET_PERIOD, turret_damage
 from . import items as item_fx
+from .bot_shop import BotShopper
 
 POKE_TYPES = ("volley",)
 
@@ -28,6 +29,7 @@ class BotBrain:
         self.bush_lover = self.rng.random() < 0.7      # 할 일이 없을 때 부쉬에 숨어 기다리는 성격
         self.seen = {}                  # 적 챔피언 id -> (x, z, 본 시각, 체력 비율) — 시야에서 사라진 적을 쫓을 때 쓴다
         self.chase = None               # 쫓던 적 챔피언 id
+        self.shopper = BotShopper(champ, random.Random(champ.id * 104729 + random.randrange(1 << 30)))
 
     # ------------------------------------------------------------------
     def update(self, sim, dt):
@@ -107,14 +109,7 @@ class BotBrain:
                     break
 
     def shop(self, sim):
-        c = self.c
-        for iid in c.data.get("bot_build", []):
-            if any(gamedata.contains(have, iid) for have in c.items):
-                continue                    # 이미 있거나 그걸 재료로 한 상위 아이템이 있다
-            if gamedata.items().get(iid) is None:
-                continue
-            sim.buy(c, iid)                 # 모자라면 롤처럼 빠진 재료부터 산다
-            break
+        self.shopper.shop(sim)              # 가중치 무작위로 고른 목표 아이템을 재료부터 사 모은다 (bot_shop.py)
 
     # ------------------------------------------------------------------ 판단 보조
     def enemy_turrets(self, sim):
