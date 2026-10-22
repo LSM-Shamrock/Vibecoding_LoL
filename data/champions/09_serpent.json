@@ -20,10 +20,12 @@
   ],
   "bot_build": [
     "swift_boots",
+    "mana_blade",
     "blood_fang",
-    "ice_reaper",
-    "guardian_mail",
-    "frost_edge"
+    "vampire_scythe",
+    "bastion",
+    "titan_pulse",
+    "spirit_cloak"
   ],
   "stats": {
     "hp": 760,

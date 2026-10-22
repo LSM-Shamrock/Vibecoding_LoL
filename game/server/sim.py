@@ -29,6 +29,7 @@ from ..shared.constants import (
 )
 from ..shared.spells import SPELLS
 from . import abilities
+from . import items as item_fx
 from .bot import BotBrain
 from .entities import (
     MINION_CODES, TURRET_MINION_DMG, Anchor, Champion, Minion, Projectile, Relic, Structure,
@@ -283,7 +284,8 @@ class Simulation:
             u.facing = math.atan2(z - u.z, x - u.x)
 
     # ------------------------------------------------------------------ 피해
-    def deal_damage(self, src, target, amount, dtype, ability=False, basic=False):
+    def deal_damage(self, src, target, amount, dtype, ability=False, basic=False, proc=True):
+        """proc=False: 아이템 효과가 주는 피해 (다른 아이템 효과를 다시 일으키지 않는다)."""
         if target is None or not target.alive or amount <= 0:
             return 0.0
         if isinstance(target, Champion) and target.dead:
@@ -339,6 +341,8 @@ class Simulation:
             self.event(e="dmg", s=src_id, d=target.id, v=int(round(taken)), ty=dtype[0])
 
         if isinstance(src, Champion):
+            if ability and proc and taken > 0:
+                item_fx.on_ability_hit(self, src, target)
             if isinstance(target, Champion):
                 target.damage_log[src.id] = self.time
                 self.help_calls.append((self.time + 2.0, src.id, target.team, target.x, target.z))
@@ -588,6 +592,8 @@ class Simulation:
                 self.surrender_vote(c, bool(msg.get("yes", True)))
             elif c.dead:
                 return
+            elif cmd == "use_item":
+                item_fx.use(self, c, int(msg["slot"]))
             elif cmd == "recall":
                 self.recall(c)
             elif cmd == "move":
@@ -647,8 +653,13 @@ class Simulation:
         if yes >= need:
             self.ff_votes[team] = None
             self.event(e="ff", tm=team, k="pass", y=yes, n=no)
-            self.winner = other(team)
-            self.event(e="victory", team=self.winner)
+            self.event(e="announce", text=f"{'블루' if team == BLUE else '레드'}팀이 항복했습니다.")
+            nexus = self.structure_by_key(team, "nexus")          # 롤처럼 항복한 팀의 넥서스가 터지며 끝난다
+            if nexus is not None and nexus.alive:
+                self.structure_destroyed(nexus, None)
+            else:
+                self.winner = other(team)
+                self.event(e="victory", team=self.winner)
         elif len(voters) - no < need or self.time >= vote["until"]:
             self.ff_votes[team] = None
             self.ff_ready_at[team] = self.time + SURRENDER_RETRY
@@ -806,6 +817,7 @@ class Simulation:
         c.mana -= cost
         c.recall_at = None
         c.ready_at[slot] = t + c.cooldown_of(slot)
+        item_fx.on_cast(self, c, cost)
         c.windup = None
         c.cast_anim_until = t + 0.3
         self.face(c, x, z)
@@ -966,6 +978,8 @@ class Simulation:
         if crit:
             dmg *= 1.75
         self.deal_damage(c, target, dmg, "physical", basic=True)
+        if target.alive and not getattr(target, "dead", False):
+            item_fx.on_basic_hit(self, c, target)
 
     def release_attack(self, attacker, target, damage_fn, style, speed, ranged):
         if ranged:
@@ -1012,6 +1026,7 @@ class Simulation:
         self.update_displacements(dt)
         for c in self.champions.values():
             self.update_champion(c, dt)
+            item_fx.tick(self, c, dt)
         for m in list(self.minions.values()):
             if m.alive:
                 self.update_minion(m, dt)
@@ -1671,6 +1686,7 @@ class Simulation:
                   "cr": round(c.stats["crit"] * 100)},
             "sb": {k: round(v, 2) for k, v in c.base_stats.items()},
             "sh": round(c.shield_total(t)),
+            "icd": {k: round(v - t, 1) for k, v in c.item_cd.items() if v > t},
         }
         return row
 

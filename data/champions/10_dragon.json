@@ -20,10 +20,13 @@
   ],
   "bot_build": [
     "sage_shoes",
+    "chalice",
     "arcane_crown",
-    "titan_heart",
+    "archmage_crown",
+    "eternal_chalice",
+    "hourglass",
     "spirit_cloak",
-    "guardian_mail"
+    "titan_heart"
   ],
   "stats": {
     "hp": 650,

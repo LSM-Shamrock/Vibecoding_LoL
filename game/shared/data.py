@@ -68,13 +68,21 @@ def can_buy(owned, iid, slots):
 
 def purchase_plan(owned, iid, gold, slots):
     """구매 버튼을 눌렀을 때 실제로 살 아이템 순서 (롤 상점처럼).
-    iid 를 살 돈이 있으면 [iid], 모자라면 아직 없는 재료 중 비싼 것부터 살 수 있는 만큼. 살 게 없으면 []."""
+    iid 를 살 돈이 있으면 [iid], 모자라면 아직 없는 재료 중 비싼 것부터 살 수 있는 만큼
+    (재료도 못 사면 그 재료의 재료로 내려간다 — 3단계 아이템). 살 게 없으면 []."""
     ok, used, price, _why = can_buy(owned, iid, slots)
     if not ok:
         return []
     if gold >= price:
         return [iid]
+    plan, _inv, _left = _plan_parts(owned, iid, gold, slots)
+    return plan
+
+
+def _plan_parts(owned, iid, gold, slots):
+    """iid 의 빠진 재료를 살 수 있는 만큼 산다: (구매 순서, 산 뒤 인벤토리, 남은 골드)."""
     its = items()
+    _ok, used, _price, _why = can_buy(owned, iid, slots)
     missing = list(its[iid].get("from", []))
     for comp in used:
         missing.remove(comp)
@@ -87,11 +95,21 @@ def purchase_plan(owned, iid, gold, slots):
             inv.append(comp)
             left -= price2
             plan.append(comp)
-    return plan
+        elif its[comp].get("from"):
+            sub, inv, left = _plan_parts(inv, comp, left, slots)
+            plan += sub
+    return plan, inv, left
+
+
+def contains(have, iid):
+    """have 아이템이 iid 이거나 iid 를 재료로 (몇 단계 아래든) 품고 있는가."""
+    if have == iid:
+        return True
+    return any(contains(c, iid) for c in items().get(have, {}).get("from", []))
 
 
 def upgrades_of(iid):
-    """iid 를 재료로 쓰는 2단계 아이템 id 목록."""
+    """iid 를 재료로 쓰는 상위 아이템 id 목록."""
     return [i for i, it in items().items() if iid in it.get("from", [])]
 
 

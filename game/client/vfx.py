@@ -71,6 +71,10 @@ WIND = (1.0, 0.88, 0.7)                 # 날개바람 (불기운이 섞인 뜨�
 REAP = (0.62, 0.48, 1.0)                # 사신의 영혼 빛
 REAP_HOT = (0.86, 0.82, 1.0)
 REAP_SOUL = (0.55, 0.95, 1.0)           # 사신의 눈·날끝과 같은 청록 빛
+BOLT = (1.0, 0.95, 0.45)                # 아이템: 번개
+ARCANE = (0.72, 0.42, 1.0)              # 아이템: 비전 구슬
+ICE = (0.6, 0.9, 1.0)                   # 아이템: 얼음
+BLOOD = (0.9, 0.12, 0.2)                # 아이템: 흡혈
 
 _rnd = random.Random(11)
 
@@ -290,6 +294,81 @@ class Vfx:
             self.emit("shard", x + math.cos(a) * d, 0.2, z + math.sin(a) * d, size=(rr(0.25, 0.5), rr(0.4, 0.8)),
                       dur=dur * rr(0.7, 1.1), col=col, add=False, vel=(math.cos(a) * 1.5, rr(4, 8), math.sin(a) * 1.5),
                       grav=-22.0, rot=rr(0, math.tau), spin=rr(-9, 9), fade_pow=0.6, fade_in=0.01)
+
+    def nexus_explode(self, x, z, col):
+        """넥서스 파괴: 작은 폭발이 몇 번 이어지다 큰 빛기둥과 충격파로 무너진다 (롤 게임 끝 연출)."""
+        with self.neutral():
+            for k in range(6):                                  # 겉에서 터지는 작은 폭발들
+                d = k * 0.25
+                a = rr(0, math.tau)
+                ox, oz = x + math.cos(a) * rr(0.6, 1.8), z + math.sin(a) * rr(0.6, 1.8)
+                self.emit("glow", ox, rr(1.0, 2.6), oz, size=1.2, size_to=3.2, dur=0.45, delay=d, col=FIRE, col_to=GOLD)
+                self.burst("ember", ox, 1.5, oz, 6, 4.0, 0.3, 0.6, GOLD, up=4.0, grav=-10, delay=d)
+            d = 1.6                                             # 마지막 큰 폭발
+            self.emit("glow", x, 2.0, z, size=3.0, size_to=12.0, dur=0.9, delay=d, col=PALE, col_to=col, fade_pow=0.7)
+            self.emit("glow", x, 0.1, z, size=6.0, size_to=14.0, dur=1.4, delay=d, col=col, mode="flat")
+            self.emit("crack", x, 0.06, z, size=9.0, dur=3.0, delay=d, col=col, mode="flat", rot=rr(0, 6), fade_pow=0.6)
+            self.emit("beam", x, 9.0, z, size=(5.0, 18.0), size_to=(1.0, 18.0), dur=1.2, delay=d, col=PALE, fade_in=0.05)
+            for i in range(3):
+                self.shock(x, z, 4.0 + i * 3.0, PALE if i == 0 else col, 0.8 + i * 0.2, d + i * 0.12)
+            self.burst("glow", x, 1.5, z, 24, 12.0, 0.7, 1.1, col, up=8.0, grav=-12, delay=d)
+            self.burst("ember", x, 1.0, z, 30, 10.0, 0.35, 1.3, GOLD, up=10.0, grav=-14, delay=d)
+        for _ in range(16):
+            a = rr(0, math.tau)
+            dd = rr(0.3, 2.0)
+            self.emit("shard", x + math.cos(a) * dd, 1.5, z + math.sin(a) * dd, size=(rr(0.4, 0.9), rr(0.6, 1.2)),
+                      dur=rr(0.9, 1.4), delay=1.6, col=STEEL, add=False, vel=(math.cos(a) * 5, rr(7, 12), math.sin(a) * 5),
+                      grav=-22.0, rot=rr(0, math.tau), spin=rr(-9, 9), fade_pow=0.6, fade_in=0.01)
+        self.dust_ring(x, z, 6.0, 18, dur=1.6)
+
+    # ---- 아이템 효과 -------------------------------------------------------
+    def fx_item(self, kind, ev):
+        x, z = ev["x"], ev["z"]
+        style = ev.get("style")
+        with self.neutral():
+            if style == "spark":                                # 폭풍 사냥꾼: 맞은 자리에서 번개가 튄다
+                self.emit("glow", x, 1.1, z, size=1.4, size_to=0.4, dur=0.25, col=BOLT)
+                self.burst("spark", x, 1.1, z, 8, 5.0, 0.35, 0.3, BOLT, up=1.5)
+            elif style == "frost":                              # 서리 군주: 얼음이 터진다
+                self.emit("glow", x, 1.0, z, size=1.0, size_to=2.6, dur=0.35, col=ICE)
+                self.emit("crack", x, 0.06, z, size=2.2, dur=0.9, col=ICE, mode="flat", rot=rr(0, 6), fade_pow=0.8)
+                self.shock(x, z, 1.2, ICE, 0.4)
+                self.burst("shard", x, 1.0, z, 8, 4.0, 0.35, 0.5, ICE, up=3.0, grav=-12, add=False, spin=8)
+            elif style == "drain":                              # 흡혈 대낫: 붉은 낫바람이 휘돌고 피가 빨려 든다
+                r = ev.get("r", 4.0)
+                base = rr(0, math.tau)
+                for k in range(2):
+                    self.emit("slash", x, 0.9, z, size=r * 2.1, dur=0.35, delay=k * 0.06, col=BLOOD, mode="flat",
+                              rot=base + k * 3.1, spin=-14.0, pivot=0.22, fade_pow=0.8, fade_in=0.02)
+                self.emit("glow", x, 0.1, z, size=r * 2.0, dur=0.35, col=BLOOD, mode="flat")
+                self.shock(x, z, r, BLOOD, 0.45)
+                for i in range(12):
+                    a = i / 12 * math.tau
+                    self.emit("glow", x + math.cos(a) * r, 1.0, z + math.sin(a) * r, size=0.5, dur=0.5, delay=0.15,
+                              col=BLOOD, vel=(-math.cos(a) * r * 2, 0.5, -math.sin(a) * r * 2), fade_pow=0.8)
+            elif style == "shield":                             # 불멸의 성채: 은빛 방벽이 선다
+                dur = ev.get("dur", 3.0)
+                self.emit("ring", x, 0.1, z, size=2.6, size_to=1.6, dur=0.5, col=PALE, mode="flat")
+                self.emit("glow", x, 1.2, z, size=3.2, dur=0.6, col=STEEL, alpha=0.6)
+                self.pillar(x, z, STEEL, 4.0, 1.6, 0.5)
+                for k in range(int(dur * 4)):
+                    self.emit("ring", x, 0.12, z, size=1.8, size_to=2.2, dur=0.4, delay=k * 0.25, col=STEEL, mode="flat",
+                              alpha=0.5)
+            elif style == "stasis":                             # 시간의 모래시계: 황금빛 껍질에 갇힌다
+                dur = ev.get("dur", 2.5)
+                self.emit("glow", x, 1.2, z, size=3.4, dur=dur, col=GOLD, alpha=0.55, fade_in=0.15, fade_pow=0.3)
+                self.emit("ring", x, 0.1, z, size=2.4, dur=dur, col=GOLD, mode="flat", spin=1.5, fade_pow=0.3)
+                self.pillar(x, z, HOLY, 5.0, 1.8, 0.4)
+                self.burst("spark", x, 1.0, z, 14, 4.0, 0.4, 0.6, GOLD, up=2.0)
+
+    def burn_aura(self, x, z, radius):
+        """거신의 맥동: 몸 둘레에 불씨가 피어오르는 기운 (매 프레임 부른다)."""
+        with self.neutral():
+            for _ in range(self.rate(10)):
+                a = rr(0, math.tau)
+                d = radius * rr(0.3, 1.0)
+                self.emit("glow", x + math.cos(a) * d, 0.2, z + math.sin(a) * d, size=rr(0.25, 0.5), dur=0.8, col=FIRE,
+                          col_to=GOLD, vel=(0, rr(0.8, 1.6), 0), fade_pow=0.8, alpha=0.7)
 
     # ---- 내려찍기 착지 ----------------------------------------------------
     def fx_slam(self, kind, ev):
@@ -949,6 +1028,8 @@ class Vfx:
         "scythe": ("", 0.0, 0.0, REAP, REAP_SOUL, 1.4, "spark", 16),
         "minion_bolt": ("streak", 1.0, 0.25, PALE, PALE, 0.7, None, 0),
         "cannon_ball": ("streak", 1.2, 0.4, (0.8, 0.8, 0.85), (0.8, 0.8, 0.85), 0.0, None, 0),
+        "item_bolt": ("streak", 2.0, 0.35, BOLT, (0.85, 0.95, 1.0), 0.9, "spark", 26),     # 폭풍 사냥꾼: 튀는 번개
+        "item_missile": ("streak", 1.0, 0.4, ARCANE, (0.85, 0.6, 1.0), 1.0, "ember", 18),   # 대마법사의 왕관: 비전 구슬
     }
 
     def projectile(self, p, x, y, z, ally, team_tint=True):

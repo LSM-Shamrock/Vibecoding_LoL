@@ -13,6 +13,7 @@
 - Enter: 채팅 (Enter 로 보내기, Esc 로 취소). 킬·포탑 파괴 같은 알림도 채팅창에 올라온다
 - 좌클릭: 챔피언·미니언·구조물을 고르면 왼쪽 위에 체력·능력치 정보창 (땅을 누르면 닫힌다)
 - 항복: 채팅에 /ff (또는 /항복), ESC 설정 창의 항복 버튼. 투표는 오른쪽 찬성/반대 버튼
+- 1~8: 그 칸의 사용 아이템 사용 (HUD 의 아이템을 눌러도 된다)
 """
 import math
 import time
@@ -45,7 +46,8 @@ BABY_ATTACK_TILT = -0.55         # 새끼 거미가 공격할 때 앞을 드는 
 MINION_RADIUS = {0: 0.45, 1: 0.4, 2: 0.6, 3: 0.75, 4: 0.34}
 MINION_HEIGHT = {0: 1.2, 1: 1.25, 2: 1.1, 3: 2.0, 4: 0.7}
 PROJ_SPEED = {"arrow": 22, "snowball": 25, "turret_shot": 16, "turret_shot_2": 16, "turret_shot_3": 16, "minion_bolt": 14, "cannon_ball": 14,
-              "web_shot": 20, "baby_shot": 20, "fire_bolt": 18, "tornado": 9, "scythe": 17}
+              "web_shot": 20, "baby_shot": 20, "fire_bolt": 18, "tornado": 9, "scythe": 17,
+              "item_bolt": 24, "item_missile": 16}
 # 투사체별 (높이, 발광색)
 PROJ_LOOK = {"turret_shot": (3.2, (0.3, 0.3, 0.3)), "turret_shot_2": (3.2, (0.5, 0.25, 0.1)), "turret_shot_3": (3.2, (0.7, 0.15, 0.08)), "minion_bolt": (0.8, None), "cannon_ball": (0.8, None),
              "snowball": (1.1, (0.3, 0.3, 0.3)), "web_shot": (1.0, (0.2, 0.2, 0.15)), "baby_shot": (0.8, (0.2, 0.2, 0.15)),
@@ -63,7 +65,7 @@ STATUS_BADGES = [
 STAT_LABELS = [("ad", "공격력", 1), ("ap", "주문력", 1), ("hp", "체력", 1), ("mana", "마나", 1),
                ("armor", "방어력", 1), ("mr", "마법 저항력", 1), ("attack_speed", "공격 속도 %", 100),
                ("move_speed", "이동 속도", 100), ("ability_haste", "스킬 가속", 1), ("crit", "치명타 %", 100),
-               ("life_steal", "생명력 흡수 %", 100), ("hp_regen", "체력 재생", 1)]
+               ("life_steal", "생명력 흡수 %", 100), ("hp_regen", "체력 재생", 1), ("mana_regen", "마나 재생", 1)]
 SLOTS = ("Q", "W", "E", "R")
 # 마우스 아래 유닛 판정 반경 (줌 22 기준 화면 픽셀). 모델보다 넉넉하게 잡아 평타 클릭이 쉽게
 HOVER_RADIUS = {"champion": 58, "minion": 38}
@@ -105,6 +107,9 @@ TEAMFRAME = pygame.Rect(1000, 392, 270, 208)      # 미니맵 위 팀 프로필 
 TARGET_FRAME = pygame.Rect(12, 12, 300, 0)        # 좌클릭으로 고른 유닛 정보창 (왼쪽 위, 높이는 내용에 따라)
 FF_PANEL = pygame.Rect(1000, 300, 270, 84)        # 항복 투표창 (팀 프로필 위)
 FF_COMMANDS = ("/ff", "/항복", "/surrender")
+ITEM_AURA_R = gamedata.items().get("titan_pulse", {}).get("effect", {}).get("radius", 3.5)
+END_PAN_TIME = 1.2              # 게임이 끝나면 카메라가 무너지는 넥서스로 가는 시간
+END_BANNER_DELAY = 3.4          # 넥서스가 터진 뒤 승리/패배 글자가 뜨기까지
 MINION_TYPE_OF = {0: "melee", 1: "caster", 2: "cannon", 3: "super", 4: "spiderling"}
 MINION_NAMES = {0: "근거리 미니언", 1: "원거리 미니언", 2: "공성 미니언", 3: "슈퍼 미니언", 4: "새끼 거미"}
 STRUCT_NAMES = {"inner": "포탑", "nexus_t1": "넥서스 포탑", "nexus_t2": "넥서스 포탑", "inhib": "억제기", "nexus": "넥서스"}
@@ -329,6 +334,11 @@ def item_stat_text(item):
     return ", ".join(parts)
 
 
+def item_desc(item):
+    """고유 효과·사용 효과 설명 (없으면 빈 글자)."""
+    return item.get("desc", "")
+
+
 class CEnt:
     """스냅샷 사이를 부드럽게 보간하는 클라이언트 쪽 유닛."""
 
@@ -393,6 +403,8 @@ class GameScene(Scene):
         self.wave_in = 0.0
         self.winner = None
         self.over_at = 0.0
+        self.end_focus = None       # 게임이 끝나면 카메라가 가는 곳 (진 팀 넥서스)
+        self.end_vo = False         # 승리/패배 안내 음성을 틀었는가
         self.audio = app.audio
         self.last_kill_at = -99.0   # 내가 마지막으로 처치한 시각 (연속 처치 알림용)
         self.my_ranks = None        # 내 스킬 레벨 / 아이템 수 (올랐는지 알아보려고)
@@ -496,6 +508,18 @@ class GameScene(Scene):
         cam.pitch = math.radians(56)
         cam.yaw = 0.0
         cam.distance = self.zoom
+
+    def use_item(self, slot):
+        me = self.me
+        if not me or slot >= len(me["it"]):
+            return
+        it = gamedata.items().get(me["it"][slot], {})
+        if not it.get("active"):
+            return
+        if me.get("icd", {}).get(me["it"][slot], 0) > 0:
+            self.audio.play("ui_error")
+            return
+        self.send_cmd(c="use_item", slot=slot)
 
     def request_surrender(self):
         """항복 투표를 열거나(열려 있으면) 찬성한다. 설정 창의 항복 버튼도 이걸 부른다."""
@@ -602,7 +626,13 @@ class GameScene(Scene):
             self.winner = msg["winner"]
             self.over_at = time.time()
             self.audio.play_music(None, 2500)       # 결과 화면에서는 BGM 을 서서히 끈다
-            self.announce("victory" if self.winner == self.my_team else "defeat", 10, interrupt=True)
+            # 롤처럼 카메라가 진 팀 넥서스로 가서 무너지는 걸 보여 준 뒤 승리/패배 (안내 음성도 그때)
+            nexus = next((s for s in self.structs.values() if s["k"] == "nexus" and s["tm"] != self.winner), None)
+            if nexus is not None:
+                self.end_focus = (nexus["x"], nexus["z"])
+            self.shop_open = self.show_score = False
+            self.aiming = None
+            self.selected = None
 
     def apply_snapshot(self, s):
         now = time.time()
@@ -655,6 +685,10 @@ class GameScene(Scene):
             if old and old[2] and not row[2]:
                 info = self.structs[row[0]]
                 self.add_fx("burst", info["x"], info["z"], 1.2, radius=4.0, color=(1.0, 0.7, 0.4))
+                if info["k"] == "nexus":
+                    col = (0.4, 0.65, 1.0) if info["tm"] == BLUE else (1.0, 0.4, 0.35)
+                    self.vfx.nexus_explode(info["x"], info["z"], col)
+                    self.end_focus = (info["x"], info["z"])
                 self.sfx("struct_destroy" if info["k"] == "turret" else "struct_destroy_big", info["x"], info["z"])
             self.struct_state[row[0]] = row
 
@@ -1391,6 +1425,9 @@ class GameScene(Scene):
                 else:
                     self.open_settings()
                 return
+            if pygame.KSCAN_1 <= e.scancode < pygame.KSCAN_1 + INVENTORY_SLOTS and not self.binds.action(e):
+                self.use_item(e.scancode - pygame.KSCAN_1)
+                return
             mods = pygame.key.get_mods()
             act = self.binds.action(e)
             if act:
@@ -1500,7 +1537,9 @@ class GameScene(Scene):
             if self.inv_drag is not None:
                 src, self.inv_drag = self.inv_drag, None
                 dst = next((i for i, rect in self.hud_slot_rects if rect.collidepoint(e.pos)), None)
-                if dst is not None and dst != src:
+                if dst == src:
+                    self.use_item(src)                  # 끌지 않고 누르기만 하면 사용
+                elif dst is not None:
                     self.audio.play("ui_click")
                     self.send_cmd(c="swap", a=src, b=dst)
         elif e.type == pygame.MOUSEMOTION and self.minimap_drag:
@@ -1691,7 +1730,15 @@ class GameScene(Scene):
         cam.distance += (self.zoom - cam.distance) * min(1.0, dt * 10)
         keys = pygame.key.get_pressed()
         me = self.champs.get(self.my_id)
-        if me and (self.cam_locked or "cam_center" in self.held):
+        if self.winner is not None and self.end_focus:
+            k = min(1.0, dt * 3.5 / END_PAN_TIME)
+            cam.tx += (self.end_focus[0] - cam.tx) * k
+            cam.tz += (self.end_focus[1] - cam.tz) * k
+            self.zoom = ZOOM_MAX
+            if not self.end_vo and time.time() - self.over_at >= END_BANNER_DELAY:
+                self.end_vo = True
+                self.announce("victory" if self.winner == self.my_team else "defeat", 10, interrupt=True)
+        elif me and (self.cam_locked or "cam_center" in self.held):
             cam.tx += (me.x - cam.tx) * min(1.0, dt * 10)
             cam.tz += (me.z - cam.tz) * min(1.0, dt * 10)
         elif not self.minimap_drag and not self.settings_open:
@@ -1854,6 +1901,8 @@ class GameScene(Scene):
                 continue
             st = d["st"]
             self.vfx.status(st, e.x, e.z, e.lift, info["tm"] == self.my_team, d.get("sh", 0) > 0)
+            if "titan_pulse" in d.get("it", ()):
+                self.vfx.burn_aura(e.x, e.z, ITEM_AURA_R)
             if cid == self.my_id:
                 ring_col = (0.6, 1.0, 0.3, 0.9)
             elif info["tm"] == self.my_team:
@@ -1952,6 +2001,9 @@ class GameScene(Scene):
             if p["style"] == "tornado":                           # 용의 회오리: 겹겹이 도는 반투명 원뿔대
                 self.draw_tornado(r, m, x, z, t)
                 self.vfx.projectile(p, x, 1.0, z, p["team"] == self.my_team)
+                continue
+            if p["style"].startswith("item_"):                    # 아이템 투사체 (번개·비전 구슬): 빛과 꼬리만
+                self.vfx.projectile(p, x, 1.3, z, p["team"] == self.my_team)
                 continue
             if p["style"] == "scythe":                            # 사신의 낫: 수평으로 빙글빙글 돌며 날아간다
                 ally = p["team"] == self.my_team
@@ -2354,7 +2406,7 @@ class GameScene(Scene):
                 self.draw_item_tooltip(surf, *self.shop_tip)
         if self.show_score:
             self.draw_scoreboard(surf)
-        if self.winner is not None:
+        if self.winner is not None and time.time() - self.over_at >= END_BANNER_DELAY:
             self.draw_game_over(surf)
         if getattr(self, "stat_tip", None) and not self.settings_open:
             self.draw_stat_tooltip(surf, *self.stat_tip)
@@ -2662,8 +2714,15 @@ class GameScene(Scene):
                     dim = pygame.Surface(rect.size, pygame.SRCALPHA)
                     dim.fill((0, 0, 0, 150))
                     surf.blit(dim, rect.topleft)
+                cd = me.get("icd", {}).get(me["it"][i], 0)
+                if cd > 0:                              # 사용 아이템 재사용 대기
+                    shade(surf, rect, (0, 0, 0, 160), 4)
+                    ui.text(surf, f"{cd:.0f}", rect.center, 14, anchor="center", bold=True)
+                elif it.get("active"):
+                    ui.text(surf, str(i + 1), (rect.x + 2, rect.y), 10, ui.GOLD, bold=True)
                 if rect.collidepoint(mouse) and self.inv_drag is None:
-                    tooltip = (it["name"], f"{item_stat_text(it)}\n{sell_text(it)}")
+                    body = item_stat_text(it) + (f"\n{item_desc(it)}" if item_desc(it) else "")
+                    tooltip = (it["name"], f"{body}\n{sell_text(it)}")
             pygame.draw.rect(surf, ui.HIGHLIGHT if drop else ui.BORDER, rect, 1, border_radius=4)
         if self.inv_drag is not None:                   # 끌고 있는 아이템은 마우스를 따라온다
             draw_item(surf, me["it"][self.inv_drag], pygame.Rect(mouse[0] - 16, mouse[1] - 16, 32, 32))
@@ -3108,7 +3167,8 @@ class GameScene(Scene):
         gold = me["g"] if me else 0
         tier1 = [i for i, it in its.items() if it.get("tier", 1) == 1 and not it.get("boots")]
         boots = [i for i, it in its.items() if it.get("boots")]
-        tier2 = [i for i, it in its.items() if it.get("tier", 1) >= 2 and not it.get("boots")]
+        tier2 = [i for i, it in its.items() if it.get("tier", 1) == 2 and not it.get("boots")]
+        tier3 = [i for i, it in its.items() if it.get("tier", 1) >= 3 and not it.get("boots")]
         if self.shop_view not in its:
             self.shop_view = tier2[0] if tier2 else next(iter(its))
         if self.shop_sel not in its:
@@ -3137,15 +3197,17 @@ class GameScene(Scene):
         # 가운데: 아이템 목록 (아이콘 + 가격)
         mid = pygame.Rect(bx.right + 10, top, 408, p.bottom - top - 14)
         ui.panel(surf, mid, (16, 24, 40, 235), (60, 75, 105), radius=6)
-        cell_w, cell_h, cols = 66, 84, 6
-        y = mid.y + 10
-        for title, ids in (("기본 아이템", tier1), ("상위 아이템", tier2)):
+        cell_w, cell_h, cols = 58, 70, 7
+        y = mid.y + 8
+        for title, ids in (("기본 아이템", tier1), ("상위 아이템", tier2), ("최상위 아이템", tier3)):
+            if not ids:
+                continue
             ui.text(surf, title, (mid.x + 12, y), 15, ui.GOLD, bold=True)
-            y += 28
+            y += 24
             for k, iid in enumerate(ids):
                 rect = pygame.Rect(mid.x + 6 + (k % cols) * cell_w, y + (k // cols) * cell_h, cell_w - 4, cell_h - 6)
                 self.draw_shop_entry(surf, rect, iid, owned, gold, mouse, sel)
-            y += ((len(ids) + cols - 1) // cols) * cell_h + 12
+            y += ((len(ids) + cols - 1) // cols) * cell_h + 4
 
         # 오른쪽: 고른 아이템
         area = pygame.Rect(mid.right + 10, top, p.right - mid.right - 24, p.bottom - top - 14)
@@ -3165,7 +3227,7 @@ class GameScene(Scene):
         chosen = iid == sel
         bg = (50, 74, 115, 245) if chosen else ((36, 52, 82, 240) if hover else (22, 32, 50, 230))
         ui.panel(surf, rect, bg, ui.GOLD if chosen else (ui.HIGHLIGHT if hover else ui.BORDER), radius=5)
-        size = 38 if row else 48
+        size = 38 if row else 40
         ir = pygame.Rect(0, 0, size, size)
         if row:
             ir.midleft = (rect.x + 6, rect.centery)
@@ -3183,7 +3245,7 @@ class GameScene(Scene):
             if not allowed:
                 ui.text(surf, "보유 중", (rect.right - 6, rect.y + 28), 11, (230, 120, 100), anchor="topright", shadow=False)
         else:
-            ui.text(surf, f"{price}", (rect.centerx, ir.bottom + 5), 13, pc, anchor="midtop")
+            ui.text(surf, f"{price}", (rect.centerx, ir.bottom + 3), 13, pc, anchor="midtop")
         if used and allowed:                       # 가진 재료가 쓰인다 (그만큼 싸짐)
             pygame.draw.circle(surf, (110, 220, 130), (ir.right - 4, ir.y + 4), 4)
         self.shop_rects.append((iid, rect, True))
@@ -3207,6 +3269,9 @@ class GameScene(Scene):
         for line in ui.wrap(item_stat_text(it), 13, area.width - 24):
             ui.text(surf, line, (x, y), 13, ui.TEXT)
             y += 18
+        for line in ui.wrap(item_desc(it), 12, area.width - 24) if item_desc(it) else ():
+            ui.text(surf, line, (x, y), 12, (150, 210, 255))
+            y += 16
         y += 10
 
         # 조합 트리: 위에 view 아이템, 아래에 재료 (가진 재료는 초록 테두리)
@@ -3274,6 +3339,8 @@ class GameScene(Scene):
                  (f"{price} G" + (f"  (총 {it['cost']} G)" if price != it["cost"] else ""), 13, ui.GOLD, False)]
         for ln in ui.wrap(item_stat_text(it), 13, 260):
             lines.append((ln, 13, ui.TEXT, False))
+        for ln in ui.wrap(item_desc(it), 12, 260) if item_desc(it) else ():
+            lines.append((ln, 12, (150, 210, 255), False))
         if it.get("from"):
             lines.append((" + ".join(its[c]["name"] for c in it["from"]), 12, ui.TEXT_DIM, False))
         lines.append((sell_text(it), 12, ui.TEXT_DIM, False))
@@ -3411,8 +3478,9 @@ class GameScene(Scene):
             ui.text(surf, f"{math.ceil(cd)}", rect.center, 13, ui.TEXT, anchor="center", bold=True)
 
     def draw_game_over(self, surf):
+        fade = min(1.0, (time.time() - self.over_at - END_BANNER_DELAY) / 0.6)
         shade = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-        shade.fill((5, 8, 16, 150))
+        shade.fill((5, 8, 16, int(150 * fade)))
         surf.blit(shade, (0, 0))
         win = self.winner == self.my_team
         ui.text(surf, "승리" if win else "패배", (WIDTH // 2, HEIGHT // 2 - 40), 96,

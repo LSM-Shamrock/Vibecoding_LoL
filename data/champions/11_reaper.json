@@ -21,9 +21,11 @@
   "bot_build": [
     "swift_boots",
     "blood_fang",
-    "frost_edge",
+    "frost_lord",
+    "vampire_scythe",
+    "bastion",
     "ice_reaper",
-    "guardian_mail"
+    "storm_hunter"
   ],
   "stats": {
     "hp": 650,

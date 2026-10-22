@@ -231,8 +231,10 @@
   "bot_build": [
     "swift_boots",
     "blood_fang",
+    "frost_lord",
+    "vampire_scythe",
+    "bastion",
     "ice_reaper",
-    "guardian_mail",
-    "frost_edge"
+    "storm_hunter"
   ]
 }

@@ -128,6 +128,8 @@ class Champion(Unit):
         self.ready_at = {"Q": 0.0, "W": 0.0, "E": 0.0, "R": 0.0, "D": 0.0, "F": 0.0}
 
         self.buffs = []              # [{"until", "attack_speed_pct", "move_speed_pct"}]
+        self.item_cd = {}            # 사용 아이템 재사용 대기: {아이템 id: 다시 쓸 수 있는 시각}
+        self.item_state = {}         # 아이템 패시브 상태 (연쇄 번개 횟수, 주문검 준비, 비전 구슬 대기 등)
 
         self.dead = False
         self.respawn_at = 0.0
@@ -176,7 +178,7 @@ class Champion(Unit):
             "max_hp": s["hp"] + s["hp_per_level"] * lv + item_stats.get("hp", 0),
             "max_mana": s["mana"] + s["mana_per_level"] * lv + item_stats.get("mana", 0),
             "hp_regen": s["hp_regen"] + s["hp_regen_per_level"] * lv + item_stats.get("hp_regen", 0),
-            "mana_regen": s["mana_regen"] + s["mana_regen_per_level"] * lv,
+            "mana_regen": s["mana_regen"] + s["mana_regen_per_level"] * lv + item_stats.get("mana_regen", 0),
             "base_ad": base_ad,
             "bonus_ad": item_stats.get("ad", 0),
             "ad": base_ad + item_stats.get("ad", 0),

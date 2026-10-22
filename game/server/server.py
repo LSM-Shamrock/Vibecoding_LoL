@@ -16,7 +16,7 @@ from ..shared.net import Connection, encode
 from ..shared.spells import DEFAULT_SPELLS, SPELL_ORDER, valid_pair
 from .sim import Simulation
 
-RETURN_TO_ROOM_DELAY = 8.0
+RETURN_TO_ROOM_DELAY = 11.0      # 넥서스 파괴 연출(카메라 이동·폭발) 뒤 승/패 화면까지 보여 줄 시간
 
 
 class Client:

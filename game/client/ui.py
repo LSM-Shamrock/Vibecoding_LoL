@@ -93,6 +93,8 @@ class _SuperFont:
     def render(self, s, aa, color, *a):
         big = self.f.render(s, True, color)
         w, h = big.get_size()
+        if w < self.S:                          # 빈 글자: 0 폭 그림을 줄이면 pygame 이 죽는다
+            return pygame.Surface((1, max(1, h // self.S)), pygame.SRCALPHA)
         return pygame.transform.smoothscale(big, (max(1, w // self.S), max(1, h // self.S)))
 
     def get_height(self):

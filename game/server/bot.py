@@ -13,6 +13,7 @@ import random
 from ..shared import data as gamedata
 from ..shared import mapdata
 from ..shared.constants import EXHAUST_RANGE, IGNITE_RANGE, MARK_RANGE, TURRET_PERIOD, turret_damage
+from . import items as item_fx
 
 POKE_TYPES = ("volley",)
 
@@ -39,6 +40,7 @@ class BotBrain:
             self.shop(sim)
         if not c.dead:
             self.use_spells(sim)            # 소환사 주문은 기절 중에도 쓴다 (정화)
+            self.use_items(sim)
         if c.dead or c.dash or c.stunned(sim.time) or sim.locked(c):
             return
         self.decide(sim)
@@ -75,6 +77,26 @@ class BotBrain:
             if fire:
                 sim.cast_spell(c, slot, aim.x if aim else c.x, aim.z if aim else c.z)
 
+    def use_items(self, sim):
+        """사용 아이템: 흡혈 대낫은 적 챔피언이 닿으면, 성채·모래시계는 위험할 때."""
+        c = self.c
+        t = sim.time
+        if c.stunned(t):
+            return
+        hp = c.hp / max(1.0, c.max_hp)
+        hurt = t - c.last_hit_at < 1.5
+        for slot, iid in enumerate(c.items):
+            act = gamedata.items()[iid].get("active")
+            if act is None or t < c.item_cd.get(iid, 0.0):
+                continue
+            if act["kind"] == "drain":
+                fire = any(isinstance(u, type(c)) for u in sim.enemies_in_radius(c.team, c.x, c.z, act["radius"] - 0.3))
+            else:
+                fire = hurt and hp < (0.45 if act["kind"] == "shield" else 0.25)
+            if fire:
+                item_fx.use(sim, c, slot)
+                return
+
     def level_up(self, sim):
         c = self.c
         for _ in range(c.skill_points):
@@ -87,24 +109,11 @@ class BotBrain:
     def shop(self, sim):
         c = self.c
         for iid in c.data.get("bot_build", []):
-            if c.items.count(iid) > 0:
+            if any(gamedata.contains(have, iid) for have in c.items):
+                continue                    # 이미 있거나 그걸 재료로 한 상위 아이템이 있다
+            if gamedata.items().get(iid) is None:
                 continue
-            item = gamedata.items().get(iid)
-            if item is None:
-                continue
-            used, price = gamedata.buy_plan(c.items, iid)
-            if c.gold >= price:
-                sim.buy(c, iid)
-                continue
-            # 모자라면 이 아이템의 재료 중 빠진 것부터 산다 (롤처럼 하위 템 먼저)
-            left = list(used)
-            for comp in item.get("from", []):
-                if comp in left:
-                    left.remove(comp)
-                    continue
-                if c.gold >= gamedata.items()[comp]["cost"]:
-                    sim.buy(c, comp)
-                break
+            sim.buy(c, iid)                 # 모자라면 롤처럼 빠진 재료부터 산다
             break
 
     # ------------------------------------------------------------------ 판단 보조
