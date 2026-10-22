@@ -36,7 +36,6 @@
 
 | 파일 | 아이템 | 원본 |
 | --- | --- | --- |
-| wand.png | 비전 지팡이 | Mage_Staff_2 |
 | sapphire.png | 사파이어 수정 | sapphire_gem_01 |
 | mana_blade.png | 마나 칼날 | sword_185 |
 | chalice.png | 정령의 성배 | Dwarven_cup_01 |
