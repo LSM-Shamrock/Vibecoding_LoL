@@ -28,9 +28,13 @@ FIRST_BLOOD_BONUS = 100
 ASSIST_GOLD_RATIO = 0.5   # 어시스트한 챔피언들이 나눠 갖는 골드 = 처치 기본 골드 × 이 비율
 # 롤처럼 처치·어시스트 없이 연달아 죽은 챔피언은 처치 골드가 줄어든다 (죽은 횟수 0, 1, 2, ... 6 이상)
 DEATH_STREAK_GOLD = (KILL_GOLD, 274, 220, 176, 140, 112, 100)
-# 현상금(제압 골드): 죽지 않고 쌓은 처치(1점)·어시스트(0.5점)가 1점을 넘으면 1점마다 붙는 골드, 최대치까지
+# 현상금(제압 골드): 죽지 않고 쌓은 처치(1점)·어시스트(0.5점)가 1점을 넘으면 1점마다 붙는 골드와
+# 롤처럼 골드(아이템 + 가진 골드)가 상대 팀 평균보다 많이 앞선 만큼 붙는 골드를 더한다. 합쳐서 최대치까지
 BOUNTY_PER_POINT = 100
 BOUNTY_MAX = 700
+BOUNTY_LEAD_FREE = 500    # 이만큼 앞선 것까지는 현상금이 붙지 않는다
+BOUNTY_LEAD_RATIO = 0.15  # 그보다 더 앞선 골드의 이 비율이 현상금
+BOUNTY_LEAD_MAX = 400
 BOUNTY_ASSIST_POINT = 0.5
 ASSIST_WINDOW = 10.0      # 이 시간 안에 피해를 준 아군이 어시스트
 XP_SHARE_RANGE = 16.0
@@ -137,9 +141,19 @@ def xp_to_next(level):
     return 180 + 100 * level
 
 
-def kill_bounty(points):
-    """죽지 않고 쌓은 처치·어시스트 점수 -> 현상금(제압 골드)."""
-    return int(min(BOUNTY_MAX, max(0.0, (points - 1.0) * BOUNTY_PER_POINT)))
+def kill_bounty(points, gold_lead=0.0):
+    """죽지 않고 쌓은 처치·어시스트 점수와 골드 우위 -> 현상금(제압 골드)."""
+    streak = max(0.0, (points - 1.0) * BOUNTY_PER_POINT)
+    lead = min(BOUNTY_LEAD_MAX, max(0.0, (gold_lead - BOUNTY_LEAD_FREE) * BOUNTY_LEAD_RATIO))
+    return int(min(BOUNTY_MAX, streak + lead) // 5 * 5)
+
+
+def kill_gold(points, death_streak, gold_lead=0.0):
+    """챔피언을 처치하면 받는 골드: (연속 사망으로 줄어든 기본 골드, 현상금).
+
+    기본 골드 - KILL_GOLD + 현상금 이 롤 점수판의 현상금 숫자 (연달아 죽으면 마이너스)."""
+    base = DEATH_STREAK_GOLD[min(death_streak, len(DEATH_STREAK_GOLD) - 1)]
+    return base, kill_bounty(points, gold_lead)
 
 
 def death_timer(level):

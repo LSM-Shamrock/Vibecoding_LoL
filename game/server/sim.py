@@ -16,7 +16,7 @@ import random
 from ..shared import data as gamedata
 from ..shared import mapdata
 from ..shared.constants import (
-    ASSIST_GOLD_RATIO, ASSIST_WINDOW, BARRIER_BASE, BOUNTY_ASSIST_POINT, DEATH_STREAK_GOLD, BARRIER_PER_LEVEL, BARRIER_TIME, BLUE, CLEANSE_IMMUNE,
+    ASSIST_GOLD_RATIO, ASSIST_WINDOW, BARRIER_BASE, BOUNTY_ASSIST_POINT, KILL_GOLD, BARRIER_PER_LEVEL, BARRIER_TIME, BLUE, CLEANSE_IMMUNE,
     EXHAUST_DMG_REDUCE, EXHAUST_RANGE, EXHAUST_SLOW, EXHAUST_TIME, FIRST_BLOOD_BONUS, FIRST_WAVE_TIME,
     FLASH_COOLDOWN, FLASH_RANGE, GHOST_SPEED_PCT, GHOST_TIME, HEAL_ALLY_RATIO, HEAL_BASE, HEAL_PER_LEVEL, HEAL_RANGE,
     HEAL_SPEED_PCT, HEAL_SPEED_TIME, IGNITE_BASE, IGNITE_HEAL_CUT, IGNITE_PER_LEVEL, IGNITE_RANGE, IGNITE_TICK,
@@ -25,7 +25,7 @@ from ..shared.constants import (
     MARK_SPEED, MAX_LEVEL, PASSIVE_GOLD_PER_SEC, PASSIVE_XP_PER_SEC, PLATE_SHARE_RANGE, RECALL_TIME, RECALL_TIME_HOME, RED,
     RELIC_FIRST_SPAWN, RELIC_HEAL_PCT, RELIC_RADIUS, RELIC_RESPAWN, SELL_RATIO, SIGHT, SURRENDER_RATIO, SURRENDER_RETRY,
     SURRENDER_TIME, SURRENDER_VOTE_TIME, TURRET_PERIOD, WAVE_INTERVAL, XP_SHARE_RANGE, death_timer, turret_damage,
-    kill_bounty, xp_to_next,
+    kill_gold, xp_to_next,
 )
 from ..shared.spells import SPELLS
 from . import abilities
@@ -458,8 +458,7 @@ class Simulation:
         credited = killer_champ is not None                      # 챔피언 손에 죽었는가 (아니면 포탑·미니언에게 처형)
         shutdown = victim.kill_streak >= 3                       # 연속 처치 중이던 상대를 끊었는가
         # 처치 골드: 연달아 죽던 챔피언이면 줄고, 처치·어시스트를 쌓은 챔피언이면 현상금(제압 골드)이 붙는다
-        base_gold = DEATH_STREAK_GOLD[min(victim.death_streak, len(DEATH_STREAK_GOLD) - 1)]
-        bounty = kill_bounty(victim.bounty_pts)
+        base_gold, bounty = self.kill_gold(victim)
         victim.kill_streak = 0
         victim.multi_n = 0
         victim.bounty_pts = 0.0
@@ -533,6 +532,21 @@ class Simulation:
         if s.skind == "nexus":
             self.winner = enemy
             self.event(e="victory", team=enemy)
+
+    def net_worth(self, c):
+        its = gamedata.items()
+        return c.gold + sum(its[i]["cost"] for i in c.items if i in its)
+
+    def kill_gold(self, victim):
+        """victim 을 처치하면 받는 (기본 골드, 현상금). 골드 우위는 상대 팀 평균과 비교한다."""
+        enemies = [c for c in self.champions.values() if c.team != victim.team]
+        lead = self.net_worth(victim) - (sum(self.net_worth(c) for c in enemies) / len(enemies) if enemies else 0.0)
+        return kill_gold(victim.bounty_pts, victim.death_streak, lead)
+
+    def bounty_display(self, c):
+        """점수판 현상금: 처치 골드가 기본(KILL_GOLD)보다 얼마나 많은가 (연달아 죽었으면 마이너스)."""
+        base, bounty = self.kill_gold(c)
+        return int(base - KILL_GOLD + bounty)
 
     def give_gold(self, c, amount, x, z):
         """골드를 주고 받는 사람에게 +골드 글자를 띄운다."""
@@ -1696,7 +1710,7 @@ class Simulation:
         champs = {c.id: self.champion_row(c, t) for c in self.champions.values()}
         # 점수판(Tab)은 시야와 상관없이 모두에게
         board = [[c.id, c.level, c.kills, c.deaths, c.assists, c.cs, int(c.gold), c.items, c.dead,
-                  round(max(0.0, c.respawn_at - t)) if c.dead else 0, kill_bounty(c.bounty_pts), c.spells]
+                  round(max(0.0, c.respawn_at - t)) if c.dead else 0, self.bounty_display(c), c.spells]
                  for c in self.champions.values()]
         structs = [[s.id, round(s.hp), int(s.alive), int(self.vulnerable(s)), s.target or 0]
                    for s in self.structures.values()]

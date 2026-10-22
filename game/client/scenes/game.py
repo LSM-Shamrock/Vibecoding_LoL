@@ -132,11 +132,11 @@ def _seg_dist(px, py, a, b):
 RANK_STATS = [("cooldown", "재사용 대기시간", "{:g}초"), ("mana", "마나 소모", "{:g}"), ("damage", "피해량", "{:g}"), ("damage_per_sec", "초당 피해량", "{:g}"),
               ("cone_damage", "부채꼴 피해량", "{:g}"), ("path_damage", "지나는 길 피해량", "{:g}"),
               ("airborne", "공중에 띄움", "{:g}초"), ("wall_stun", "벽 충돌 기절", "{:g}초"), ("duration", "지속 시간", "{:g}초"),
-              ("baby_ad", "새끼 거미 평타 피해", "{:g}"), ("baby_hp", "새끼 거미 체력", "{:g}"), ("cocoon_hp", "고치 체력", "{:g}")]
+              ("baby_ad", "새끼 거미 평타 피해", "{:g}"), ("cocoon_hp", "고치 체력", "{:g}")]
 FLAT_STATS = [("ad_ratio", "공격력 계수", "{:.0%}"), ("damage_per_sec_ad", "초당 피해 공격력 계수", "{:.0%}"),
               ("cone_damage_ad", "부채꼴 피해 공격력 계수", "{:.0%}"), ("path_damage_ad", "지나는 길 피해 공격력 계수", "{:.0%}"), ("bonus_ad_ratio", "추가 공격력 계수", "{:.0%}"),
               ("ap_ratio", "주문력 계수", "{:.0%}"), ("damage_per_sec_ap", "초당 피해 주문력 계수", "{:.0%}"),
-              ("cone_damage_ap", "부채꼴 피해 주문력 계수", "{:.0%}"), ("path_damage_ap", "지나는 길 피해 주문력 계수", "{:.0%}"), ("baby_ad_ratio", "새끼 거미 공격력 계수", "{:.0%}"),
+              ("cone_damage_ap", "부채꼴 피해 주문력 계수", "{:.0%}"), ("path_damage_ap", "지나는 길 피해 주문력 계수", "{:.0%}"), ("baby_ad_ratio", "새끼 거미 공격력 계수", "{:.0%}"), ("baby_hp_ratio", "새끼 거미 체력 (거미 최대 체력 비례)", "{:.0%}"),
               ("range", "사거리", lambda v: f"{v * 100:g}"), ("radius", "범위 반경", lambda v: f"{v * 100:g}"), ("angle", "각도", "{:g}°"),
               ("knock_distance", "밀어내는 거리", lambda v: f"{v * 100:g}"), ("count", "투척 수", "{:g}자루"),
               ("slow", "둔화", "{:.0%}"), ("slow_duration", "둔화 시간", "{:g}초"), ("stun", "기절", "{:g}초"),
@@ -221,6 +221,28 @@ def draw_round_portrait(surf, chid, center, r, ring, dead=False, color=(160, 170
                 anchor="center", bold=True, shadow=False)
     if ring_w > 0:
         pygame.draw.circle(surf, ring if not dead else (110, 112, 120), center, r, ring_w)
+
+
+_UNIT_ROUND = {}
+
+
+def draw_unit_portrait(surf, name, team, center, r):
+    """원형 유닛 초상화: assets/ui/portraits/units/<name>_<팀>.png 또는 <name>.png (tools/build_unit_portraits.py 로 생성).
+    파일이 없으면 False."""
+    key = (name, team, r)
+    if key not in _UNIT_ROUND:
+        img = ui.icon(f"assets/ui/portraits/units/{name}_{team}.png", r * 2) or ui.icon(f"assets/ui/portraits/units/{name}.png", r * 2)
+        if img is not None:
+            img = img.copy()
+            mask = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
+            pygame.draw.circle(mask, (255, 255, 255, 255), (r, r), r)
+            img.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+        _UNIT_ROUND[key] = img
+    img = _UNIT_ROUND[key]
+    if img is None:
+        return False
+    surf.blit(img, (center[0] - r, center[1] - r))
+    return True
 
 
 def draw_hp_ring(surf, center, r, ratio, color, width=3):
@@ -2892,6 +2914,7 @@ class GameScene(Scene):
                 hp, ad, rng, aspd, ms, *_ = MINION_STATS[MINION_TYPE_OF[row[1]]]
                 ar, mr = MINION_RESIST.get(MINION_TYPE_OF[row[1]], (0.0, 0.0))
                 info = {"name": MINION_NAMES[row[1]], "team": row[2], "hp": row[6], "mhp": row[7],
+                        "portrait": MINION_KEYS[row[1]].replace("minion_", ""),
                         "stats": [("ad", round(row[9] if len(row) > 9 else ad)), ("armor", round(ar)), ("mr", round(mr)),
                                   ("attack_speed", f"{aspd:.2f}"), ("move_speed", round(ms * 100))]}
         elif kind == "structure":
@@ -2902,11 +2925,12 @@ class GameScene(Scene):
                 if sd["k"] == "turret":
                     stats = [("ad", round(turret_damage(self.server_time))), ("attack_speed", f"{1.0 / TURRET_PERIOD:.2f}")] + stats
                 info = {"name": STRUCT_NAMES.get(sd["key"], sd["k"]), "team": sd["tm"], "hp": st[1], "mhp": sd["mhp"],
+                        "portrait": sd["k"],
                         "stats": stats}
         elif kind == "anchor":
             row = next((r for r, _ in self.anchors if r[0] == eid), None)
             if row:
-                info = {"name": "새끼 거미 고치", "team": row[1], "hp": row[4], "mhp": row[8] if len(row) > 8 else row[4],
+                info = {"name": "새끼 거미 고치", "team": row[1], "portrait": "cocoon", "hp": row[4], "mhp": row[8] if len(row) > 8 else row[4],
                         "stats": []}
         if info is None:
             self.selected = None
@@ -2931,6 +2955,8 @@ class GameScene(Scene):
             pygame.draw.circle(surf, (12, 16, 26), lp, 10)
             pygame.draw.circle(surf, team_col, lp, 10, 1)
             ui.text(surf, str(info["lv"]), lp, 12, anchor="center", bold=True, shadow=False)
+        elif info.get("portrait") and draw_unit_portrait(surf, info["portrait"], self.view_team(info["team"]), pc, 24):
+            pygame.draw.circle(surf, team_col, pc, 24, 2)
         else:
             pygame.draw.circle(surf, (24, 30, 46), pc, 24)
             pygame.draw.circle(surf, team_col, pc, 24, 2)
@@ -3465,8 +3491,9 @@ class GameScene(Scene):
                 ui.text(surf, ch["name"], (row.x + 112, row.centery + 12), 12, ui.TEXT_DIM, anchor="midleft")
                 # K/D/A 와 그 밑에 현상금, 오른쪽에 CS
                 ui.text(surf, f"{k} / {dth} / {a}", (row.x + 258, row.centery - 9), 16, anchor="center", bold=True)
-                ui.text(surf, f"현상금 {bounty}", (row.x + 258, row.centery + 13), 12,
-                        (240, 150, 70) if bounty else ui.TEXT_DIM, anchor="center", bold=bool(bounty))
+                bcol = (240, 150, 70) if bounty > 0 else ((140, 170, 220) if bounty < 0 else ui.TEXT_DIM)
+                ui.text(surf, f"현상금 {bounty:+d}" if bounty else "현상금 0", (row.x + 258, row.centery + 13), 12,
+                        bcol, anchor="center", bold=bool(bounty))
                 ui.text(surf, f"CS {cs}", (row.x + 334, row.centery), 14, ui.TEXT, anchor="center")
                 # 아이템 (인벤토리처럼 4칸 x 2줄)
                 for i in range(INVENTORY_SLOTS):

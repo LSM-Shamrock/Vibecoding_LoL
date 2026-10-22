@@ -234,7 +234,8 @@ def cocoon(cx):
     mine = sorted((a for a in sim.anchors.values() if getattr(a, "cocoon", False) and a.owner is c), key=lambda a: a.until)
     while len(mine) + n > int(ab.get("max_cocoons", 6)) and mine:
         remove_anchor(sim, mine.pop(0))                        # 너무 많으면 가장 오래된 것부터 터뜨린다
-    baby = {"hp": cx.val("baby_hp", 80.0), "speed": ab.get("baby_speed", 5.4),
+    # 새끼 거미 체력은 거미 최대 체력에 비례
+    baby = {"hp": cx.val("baby_hp_ratio", 0.33) * c.max_hp, "speed": ab.get("baby_speed", 5.4),
             "dmg": cx.val("baby_ad", 10.0) + cx.val("baby_ad_ratio", 0.1) * c.stats["ad"],      # 평타 한 대의 피해 (물리)
             "proj_speed": c.data["stats"].get("projectile_speed", 20), "max_babies": ab.get("max_babies", 12), "ab": ab, "rank": cx.rank}
     px, pz = -cx.uz, cx.ux                                     # 시전 방향에 수직인 방향
