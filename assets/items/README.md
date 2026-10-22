@@ -31,3 +31,20 @@
 | iron_treads.png | 강철 방화 신발 | 15_heavy_tank_boot |
 | sage_shoes.png | 현자의 신발 | 06_arcane_violet_boot |
 | mercury_boots.png | 수은 장화 | 12_ocean_pearl_boot |
+
+아래 12종은 사용자가 준 아이콘 묶음(1024x1024 원본, 투명 배경을 잘라 128x128 로 줄임)에서 가져왔습니다. 배포 전 원본 라이선스를 확인하세요.
+
+| 파일 | 아이템 | 원본 |
+| --- | --- | --- |
+| wand.png | 비전 지팡이 | Mage_Staff_2 |
+| sapphire.png | 사파이어 수정 | sapphire_gem_01 |
+| mana_blade.png | 마나 칼날 | sword_185 |
+| chalice.png | 정령의 성배 | Dwarven_cup_01 |
+| hourglass.png | 시간의 모래시계 | Crystal_ball_01 |
+| storm_hunter.png | 폭풍 사냥꾼 | hammer_9 |
+| frost_lord.png | 서리 군주의 검 | Falmer__Axe_06 |
+| vampire_scythe.png | 흡혈 대낫 | Bloody__Ritual_Falmer_Axe |
+| archmage_crown.png | 대마법사의 왕관 | Falmer_magical_Hat_08 |
+| eternal_chalice.png | 영원의 성배 | magic_fantasy_Amulet_03 |
+| bastion.png | 불멸의 성채 | Falmer_Shield_51 |
+| titan_pulse.png | 거신의 맥동 | Firewood |
