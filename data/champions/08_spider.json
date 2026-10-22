@@ -21,14 +21,14 @@
     "hp_regen_per_level": 0.7,
     "mana_regen": 6.5,
     "mana_regen_per_level": 0.65,
-    "ad": 66,
-    "ad_per_level": 4.0,
+    "ad": 73,
+    "ad_per_level": 4.4,
     "armor": 35,
     "armor_per_level": 4.4,
     "mr": 33,
     "mr_per_level": 1.3,
-    "attack_speed": 0.72,
-    "attack_speed_per_level": 0.028,
+    "attack_speed": 0.79,
+    "attack_speed_per_level": 0.031,
     "attack_range": 3.5,
     "move_speed": 3.65,
     "radius": 0.65,
@@ -93,13 +93,13 @@
       ],
       "range": 6.5,
       "radius": 2.2,
-      "duration": 4.5,
+      "duration": 5.4,
       "slow": [
-        0.3,
-        0.35,
-        0.4,
         0.45,
-        0.5
+        0.52,
+        0.6,
+        0.67,
+        0.75
       ],
       "damage_per_sec": [
         10,
@@ -110,7 +110,7 @@
       ],
       "damage_per_sec_ad": 0.1,
       "damage_type": "physical",
-      "desc": "지정한 곳에 4.5초간 거미줄 장판을 칩니다. 안의 적은 느려지고 초당 독 피해를 입습니다."
+      "desc": "지정한 곳에 5.4초간 거미줄 장판을 칩니다. 안의 적은 느려지고 초당 독 피해를 입습니다."
     },
     "E": {
       "name": "새끼 거미 고치",

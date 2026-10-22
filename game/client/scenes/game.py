@@ -3274,39 +3274,13 @@ class GameScene(Scene):
             y += 16
         y += 10
 
-        # 조합 트리: 위에 view 아이템, 아래에 재료 (가진 재료는 초록 테두리)
-        vit = its[view]
-        comps = vit.get("from", [])
+        # 조합 트리: 위에 view 아이템, 아래로 재료와 그 재료의 재료까지 (가진 것은 초록 테두리)
         pygame.draw.line(surf, (60, 75, 105), (area.x + 10, y), (area.right - 10, y))
         y += 16
-        s_top, s_c = 44, 40
-        top_r = pygame.Rect(0, 0, s_top, s_top)
+        left_items = list(owned)
+        top_r = pygame.Rect(0, 0, 44, 44)
         top_r.midtop = (area.centerx, y)
-        self.draw_tree_node(surf, top_r, view, view in owned, mouse, sel)
-        # 목표 아이템 밑에도 재료처럼 값: 가진 재료를 빼고 지금 내야 하는 가격 (이미 가졌으면 초록)
-        _vok, _vused, vprice, _vwhy = gamedata.can_buy(owned, view, INVENTORY_SLOTS)
-        vcol = (120, 220, 140) if view in owned else (ui.GOLD if gold >= vprice else (200, 130, 110))
-        ui.text(surf, f"{vprice}", (top_r.centerx, top_r.bottom + 4), 12, vcol, anchor="midtop", shadow=False)
-        y = top_r.bottom + 26
-        if comps:
-            n = len(comps)
-            gap = 16
-            total = n * s_c + (n - 1) * gap
-            cy = top_r.bottom + 46
-            mid_y = top_r.bottom + 30
-            pygame.draw.line(surf, (90, 100, 130), (top_r.centerx, top_r.bottom + 20), (top_r.centerx, mid_y), 2)
-            left_items = list(owned)
-            for k, c in enumerate(comps):
-                r = pygame.Rect(area.centerx - total // 2 + k * (s_c + gap), cy, s_c, s_c)
-                have = c in left_items
-                if have:
-                    left_items.remove(c)
-                pygame.draw.line(surf, (90, 100, 130), (r.centerx, mid_y), (r.centerx, r.top), 2)
-                pygame.draw.line(surf, (90, 100, 130), (top_r.centerx, mid_y), (r.centerx, mid_y), 2)
-                self.draw_tree_node(surf, r, c, have, mouse, sel)
-                ui.text(surf, f"{its[c]['cost']}", (r.centerx, r.bottom + 4), 12,
-                        (120, 220, 140) if have else ui.GOLD, anchor="midtop", shadow=False)
-            y = cy + s_c + 26
+        y = self.draw_tree(surf, view, top_r, 0, left_items, False, owned, gold, mouse, sel) + 8
 
         # view 아이템이 재료로 들어가는 상위 아이템 (누르면 그 아이템의 트리로 간다)
         ups = gamedata.upgrades_of(view)
@@ -3329,6 +3303,56 @@ class GameScene(Scene):
         pygame.draw.rect(surf, ui.HIGHLIGHT if ok and hover else ui.BORDER, btn, 1, border_radius=6)
         ui.text(surf, f"구매   {price} G", btn.center, 18, ui.TEXT if ok else ui.TEXT_DIM, anchor="center", bold=True)
         self.shop_buy_rect = btn
+
+    TREE_SIZE = (44, 40, 34)
+    TREE_GAP = 10
+
+    def tree_width(self, iid, depth):
+        """조합 트리에서 iid 아래 가지가 차지하는 너비."""
+        size = self.TREE_SIZE[min(depth, 2)]
+        comps = gamedata.items()[iid].get("from", [])
+        if not comps:
+            return size + self.TREE_GAP
+        return max(size + self.TREE_GAP, sum(self.tree_width(c, depth + 1) for c in comps))
+
+    def draw_tree(self, surf, iid, r, depth, left_items, have, owned, gold, mouse, sel):
+        """r 칸에 iid 를 그리고 그 아래로 재료를 재귀로 그린다. 가장 아래 끝의 y 를 돌려준다.
+
+        가진 아이템(left_items 에서 하나씩 쓴다)은 초록, 가진 아이템의 재료도 초록으로 그린다.
+        """
+        its = gamedata.items()
+        if not have and depth > 0 and iid in left_items:
+            left_items.remove(iid)
+            have = True
+        if depth == 0:
+            have = iid in owned
+        self.draw_tree_node(surf, r, iid, have, mouse, sel)
+        if depth == 0:
+            _ok, _used, price, _why = gamedata.can_buy(owned, iid, INVENTORY_SLOTS)
+            col = (120, 220, 140) if have else (ui.GOLD if gold >= price else (200, 130, 110))
+        else:
+            price = its[iid]["cost"]
+            col = (120, 220, 140) if have else ui.GOLD
+        ui.text(surf, f"{price}", (r.centerx, r.bottom + 4), 12, col, anchor="midtop", shadow=False)
+        bottom = r.bottom + 20
+        comps = its[iid].get("from", [])
+        if not comps:
+            return bottom
+        size = self.TREE_SIZE[min(depth + 1, 2)]
+        mid_y = r.bottom + 24
+        cy = mid_y + 12
+        line = (90, 100, 130)
+        pygame.draw.line(surf, line, (r.centerx, r.bottom + 19), (r.centerx, mid_y), 2)
+        widths = [self.tree_width(c, depth + 1) for c in comps]
+        x0 = r.centerx - sum(widths) // 2
+        for c, w in zip(comps, widths):
+            cr = pygame.Rect(0, 0, size, size)
+            cr.midtop = (x0 + w // 2, cy)
+            x0 += w
+            pygame.draw.line(surf, line, (r.centerx, mid_y), (cr.centerx, mid_y), 2)
+            pygame.draw.line(surf, line, (cr.centerx, mid_y), (cr.centerx, cr.top), 2)
+            bottom = max(bottom, self.draw_tree(surf, c, cr, depth + 1, left_items, have, owned, gold, mouse, sel))
+        return bottom
 
     def draw_item_tooltip(self, surf, mouse, iid, owned):
         """상점 아이템 위에 마우스를 올렸을 때: 이름 · 가격(재료로 깎인 값) · 능력치 · 재료 · 판매 가격."""
