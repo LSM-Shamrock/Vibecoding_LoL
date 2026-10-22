@@ -29,7 +29,7 @@
     "mr_per_level": 1.3,
     "attack_speed": 0.72,
     "attack_speed_per_level": 0.028,
-    "attack_range": 3.2,
+    "attack_range": 3.5,
     "move_speed": 3.65,
     "radius": 0.65,
     "ranged": true,
